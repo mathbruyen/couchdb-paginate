@@ -4,22 +4,33 @@ var when = require('when');
 var paginate = require('../index');
 var assert = require("assert");
 
-describe('Paginate with only page size of 3', function () {
+describe('Paginate with reduced value and page size of 3', function () {
   var dbname;
   before(function (done) {
     devdb.devdb().then(function () {
       return devdb.load([
-        { key: 1, value: 'Foo1' },
-        { key: 2, value: 'Foo2' },
-        { key: 3, value: 'Foo3' },
-        { key: 4, value: 'Foo4' },
-        { key: 5, value: 'Foo5' }
+        { key: 1, value: 10 },
+        { key: 2, value: 10 },
+        { key: 2, value: 15 },
+        { key: 3, value: 10 },
+        { key: 3, value: 15 },
+        { key: 3, value: 20 },
+        { key: 4, value: 10 },
+        { key: 4, value: 15 },
+        { key: 4, value: 20 },
+        { key: 4, value: 25 },
+        { key: 5, value: 10 },
+        { key: 5, value: 15 },
+        { key: 5, value: 20 },
+        { key: 5, value: 25 },
+        { key: 5, value: 30 }
       ], [{
         key: '_design/testdesign',
         doc: {
           views: {
             testview: {
-              map: 'function (doc) { emit(doc.key, doc.value); }'
+              map: 'function (doc) { emit(doc.key, doc.value); }',
+              reduce: 'function (keys, values) { return sum(values); }'
             }
           }
         }
@@ -29,9 +40,9 @@ describe('Paginate with only page size of 3', function () {
       done();
     });
   });
-  after(function (done) {
+  /*after(function (done) {
     devdb.stop().then(done);
-  });
+  });*/
   it('should return no prev link, 3 documents and 1 next link for default key', function (done) {
     var req = {
       params: {}
@@ -43,9 +54,9 @@ describe('Paginate with only page size of 3', function () {
       }
       assert.equal(0, req.previousIds.length);
       assert.equal(3, req.documents.length);
-      assert.equal('Foo1', req.documents[0]);
-      assert.equal('Foo2', req.documents[1]);
-      assert.equal('Foo3', req.documents[2]);
+      assert.equal(10, req.documents[0]);
+      assert.equal(25, req.documents[1]);
+      assert.equal(45, req.documents[2]);
       assert.equal(1, req.nextIds.length);
       assert.equal(4, req.nextIds[0]);
       done();
@@ -72,9 +83,9 @@ describe('Paginate with only page size of 3', function () {
       assert.equal(1, req.previousIds.length);
       assert.equal(null, req.previousIds[0]);
       assert.equal(3, req.documents.length);
-      assert.equal('Foo2', req.documents[0]);
-      assert.equal('Foo3', req.documents[1]);
-      assert.equal('Foo4', req.documents[2]);
+      assert.equal(25, req.documents[0]);
+      assert.equal(45, req.documents[1]);
+      assert.equal(70, req.documents[2]);
       assert.equal(1, req.nextIds.length);
       assert.equal(5, req.nextIds[0]);
       done();
@@ -101,9 +112,9 @@ describe('Paginate with only page size of 3', function () {
       assert.equal(1, req.previousIds.length);
       assert.equal(null, req.previousIds[0]);
       assert.equal(3, req.documents.length);
-      assert.equal('Foo3', req.documents[0]);
-      assert.equal('Foo4', req.documents[1]);
-      assert.equal('Foo5', req.documents[2]);
+      assert.equal(45, req.documents[0]);
+      assert.equal(70, req.documents[1]);
+      assert.equal(100, req.documents[2]);
       assert.equal(0, req.nextIds.length);
       done();
     };
@@ -129,8 +140,8 @@ describe('Paginate with only page size of 3', function () {
       assert.equal(1, req.previousIds.length);
       assert.equal(null, req.previousIds[0]);
       assert.equal(2, req.documents.length);
-      assert.equal('Foo4', req.documents[0]);
-      assert.equal('Foo5', req.documents[1]);
+      assert.equal(70, req.documents[0]);
+      assert.equal(100, req.documents[1]);
       assert.equal(0, req.nextIds.length);
       done();
     };
@@ -156,7 +167,7 @@ describe('Paginate with only page size of 3', function () {
       assert.equal(1, req.previousIds.length);
       assert.equal(2, req.previousIds[0]);
       assert.equal(1, req.documents.length);
-      assert.equal('Foo5', req.documents[0]);
+      assert.equal(100, req.documents[0]);
       assert.equal(0, req.nextIds.length);
       done();
     };

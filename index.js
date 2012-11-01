@@ -6,6 +6,11 @@ var when = require('when');
 // # CouchDB pagination
 //
 // [Connect](http://www.senchalabs.org/connect/) middleware for paginated [CouchDB](https://couchdb.apache.org/) views.
+// Inspired from [CouchDB guide](http://guide.couchdb.org/draft/recipes.html#pagination), but left the dealbreaker part
+// out (expects keys to be unique, either emitted by only one document or reduced).
+//
+// ## Examples
+//
 module.exports = function (config) {
   // ## Configuration options
   //
@@ -52,6 +57,12 @@ module.exports = function (config) {
   // * `nextNumber` (default: `1`): number of next links to compute
   // * `prevNumber` (default: the value of `nextNumber`): number of previous links to compute
   // * `useDocuments` (default: `false`): use documents instead of reduced values
+  // * `reduce` (default: opposite of `useDocuments`): informs that there is a reduce function in the view
+  //
+  // By default it assumes that the view is a complete one with a reduce function and uses the reduced value as
+  // content. By setting `useDocuments` to `false`, it works on indexing views with no emitted value
+  // (`emit(doc.myKey, null)`) and in that case it assumes there is no reduce function. By explicitely setting
+  // `reduce` to `false`, it allows to work with views that emit a value but do not use a reduce function.
   var pageSize = config.pageSize || 20;
   if (typeof pageSize != 'number' || isNaN(pageSize) || Math.floor(pageSize) !== pageSize || pageSize <= 0) {
     throw new TypeError('"pageSize" is not a strictly positive integer');
@@ -67,6 +78,15 @@ module.exports = function (config) {
   var useDocuments = config.useDocuments || false;
   if (typeof useDocuments != 'boolean') {
     throw new TypeError('"useDocuments" is not a boolean');
+  }
+  var reduce;
+  if (typeof config.reduce == 'undefined') {
+    reduce = !useDocuments;
+  } else if (typeof config.reduce == 'boolean') {
+    reduce = config.reduce;
+  }
+  else {
+    throw new TypeError('"reduce" is not a boolean');
   }
   // ### Way to display content
   //
@@ -104,6 +124,9 @@ module.exports = function (config) {
     var obj = {
       limit: limit
     };
+    if (reduce) {
+      obj.group = true;
+    }
     if (include_docs) {
       obj.include_docs = true;
     }
