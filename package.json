@@ -10,6 +10,10 @@
       "type": "MIT"
     }
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mathbruyen/couchdb-paginate.git"
+  },
   "engines": {
     "node": "~0.8.11",
     "npm": "1.1.x"

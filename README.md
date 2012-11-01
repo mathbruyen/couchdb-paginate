@@ -2,15 +2,7 @@
 
 ## Usage
 
-With an [ExpressJS](http://expressjs.com/) application:
-
-```javascript
-var paginate = require('couchdb-paginate');
-app.get('/list/:start', paginate(config), function (req, res) {
-  // See documentation on how to setup config
-  // Send response using req.documents, ...
-})
-```
+See [here](http://mathbruyen.github.com/couchdb-paginate).
 
 ## Development
 
