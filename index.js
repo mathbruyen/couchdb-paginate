@@ -166,23 +166,32 @@ module.exports = function (config) {
       } else if (nextNumber === 0) {
         nextDef.resolve([]);
         query(startKey, uppermostKey, pageSize).then(function (body) {
-          documentsDef.resolve(body.rows.map(function (item) { return item.value; }));
+          if (body.rows.length === 0) {
+            documentsDef.reject('No document found');
+          } else {
+            documentsDef.resolve(body.rows.map(function (item) { return item.value; }));
+          }
         }, function (err) {
           documentsDef.reject(err);
         });
       } else {
         query(startKey, uppermostKey, (pageSize * nextNumber) + 1).then(function (body) {
-          var documents = [];
-          var pages = [];
-          var i;
-          for (i = 0; i < pageSize && i < body.rows.length; i++) {
-            documents.push(body.rows[i].value);
+          if (body.rows.length === 0) {
+            documentsDef.reject('No document found');
+            nextDef.reject('No document found');
+          } else {
+            var documents = [];
+            var pages = [];
+            var i;
+            for (i = 0; i < pageSize && i < body.rows.length; i++) {
+              documents.push(body.rows[i].value);
+            }
+            for (i = pageSize; i < body.rows.length; i += pageSize) {
+              pages.push(body.rows[i].key);
+            }
+            documentsDef.resolve(documents);
+            nextDef.resolve(pages);
           }
-          for (i = pageSize; i < body.rows.length; i += pageSize) {
-            pages.push(body.rows[i].key);
-          }
-          documentsDef.resolve(documents);
-          nextDef.resolve(pages);
         }, function(err) {
           documentsDef.reject(err);
           nextDef.reject(err);
@@ -196,13 +205,13 @@ module.exports = function (config) {
             pages.push(body.rows[i].key);
           }
           // We have start page
-          if (body.rows.length != (prevNumber * pageSize) + 2) {
+          if (body.rows.length !== (prevNumber * pageSize) + 2) {
             if (body.rows[body.rows.length - 1].key === pages[pages.length - 1]) {
               // Start page is the actually the last recorded
               pages[pages.length - 1] = null;
-            } else if (pages.length > 0) {
+            } else if (body.rows.length > 1) {
               // Start page is an additional one
-              pages.push(null);
+              pages[pages.length] = null;
             }
           }
           previousDef.resolve(pages);
@@ -231,7 +240,7 @@ module.exports = function (config) {
           next();
         }
       });
-    }, function (error) {
+    }).otherwise(function (error) {
       next(error);
     });
   };
