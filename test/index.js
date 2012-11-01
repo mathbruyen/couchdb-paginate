@@ -46,9 +46,7 @@ describe('Paginate', function () {
         database: dbname,
         design: 'testdesign',
         view: 'testview',
-        pageSize: 3,
-        uppermostKey: 1000,//TODO remove
-        lowestKey: 0//TODO remove
+        pageSize: 3
       })(req, res, next);
     });
   });

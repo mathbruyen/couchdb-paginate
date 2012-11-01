@@ -93,6 +93,33 @@ module.exports = function (config) {
   if (typeof previousExportKey != 'string') {
     throw new TypeError('"previousExportKey" is not a string');
   }
+  // ## Helper to query the view
+  function query(startkey, endkey, limit, include_docs, descending) {
+    var obj = {
+      limit: limit
+    };
+    if (startkey !== undefined) {
+      obj.startkey = startkey;
+    }
+    if (endkey !== undefined) {
+      obj.endkey = endkey;
+    }
+    if (include_docs) {
+      obj.include_docs = true;
+    }
+    if (descending) {
+      obj.descending = true;
+    }
+    var deferred = when.defer();
+    db.view(design, view, obj, function (err, body) {
+      if (err) {
+        deferred.reject(err);
+      } else {
+        deferred.resolve(body);
+      }
+    });
+    return deferred.promise;
+  }
   // ## Actual middleware
   return function (req, res, next) {
     when(getStartKey(req)).then(function (startKey) {
@@ -105,16 +132,8 @@ module.exports = function (config) {
       }
       if (useDocuments) {
         // Use different requests to get next pages start keys and documents to limit response size
-        db.view(design, view, {
-          startkey: startKey,
-          endkey: uppermostKey,
-          limit: pageSize,
-          include_docs: true
-        }, function (err, body) {
-          if (err) {
-            documentsDef.reject(err);
-            nextDef.reject(err);
-          } else if (body.rows.length === 0) {
+        query(startKey, uppermostKey, pageSize, true, false).then(function (body) {
+          if (body.rows.length === 0) {
             documentsDef.reject('No document found');
             nextDef.reject('No document found');
           } else {
@@ -140,71 +159,55 @@ module.exports = function (config) {
               nextDef.resolve([]);
             }
           }
+        }, function (err) {
+          documentsDef.reject(err);
+          nextDef.reject(err);
         });
       } else if (nextNumber === 0) {
         nextDef.resolve([]);
-        db.view(design, view, {
-          startkey: startKey,
-          endkey: uppermostKey,
-          limit: pageSize
-        }, function (err, body) {
-          if (err) {
-            documentsDef.reject(err);
-          } else {
-            documentsDef.resolve(body.rows.map(function (item) { return item.value; }));
-          }
+        query(startKey, uppermostKey, pageSize).then(function (body) {
+          documentsDef.resolve(body.rows.map(function (item) { return item.value; }));
+        }, function (err) {
+          documentsDef.reject(err);
         });
       } else {
-        db.view(design, view, {
-          startkey: startKey,
-          endkey: uppermostKey,
-          limit: (pageSize * nextNumber) + 1
-        }, function (err, body) {
-          if (err) {
-            documentsDef.reject(err);
-            nextDef.reject(err);
-          } else {
-            var documents = [];
-            var pages = [];
-            var i;
-            for (i = 0; i < pageSize && i < body.rows.length; i++) {
-              documents.push(body.rows[i].value);
-            }
-            for (i = pageSize; i < body.rows.length; i += pageSize) {
-              pages.push(body.rows[i].key);
-            }
-            documentsDef.resolve(documents);
-            nextDef.resolve(pages);
+        query(startKey, uppermostKey, (pageSize * nextNumber) + 1).then(function (body) {
+          var documents = [];
+          var pages = [];
+          var i;
+          for (i = 0; i < pageSize && i < body.rows.length; i++) {
+            documents.push(body.rows[i].value);
           }
+          for (i = pageSize; i < body.rows.length; i += pageSize) {
+            pages.push(body.rows[i].key);
+          }
+          documentsDef.resolve(documents);
+          nextDef.resolve(pages);
+        }, function(err) {
+          documentsDef.reject(err);
+          nextDef.reject(err);
         });
       }
       if ((prevNumber > 0) && (startKey !== lowestKey)) {
-        db.view(design, view, {
-          startkey: startKey,
-          descending: true,
-          limit: (prevNumber * pageSize) + 2,
-          endkey: lowestKey
-        }, function (err, body) {
-          if (err) {
-            previousDef.reject(err);
-          } else {
-            // Find all previous pages, not using the extra page queried to know if this is the first page if page size is 1
-            var pages = [];
-            for (var i = pageSize; i < body.rows.length && pages.length < prevNumber; i += pageSize) {
-              pages.push(body.rows[i].key);
-            }
-            // We have start page
-            if (body.rows.length != (prevNumber * pageSize) + 2) {
-              if (body.rows[body.rows.length - 1].key === pages[pages.length - 1]) {
-                // Start page is the actually the last recorded
-                pages[pages.length - 1] = null;
-              } else if (pages.length > 0) {
-                // Start page is an additional one
-                pages.push(null);
-              }
-            }
-            previousDef.resolve(pages);
+        query(startKey, lowestKey, (prevNumber * pageSize) + 2, false, true).then(function (body) {
+          // Find all previous pages, not using the extra page queried to know if this is the first page if page size is 1
+          var pages = [];
+          for (var i = pageSize; i < body.rows.length && pages.length < prevNumber; i += pageSize) {
+            pages.push(body.rows[i].key);
           }
+          // We have start page
+          if (body.rows.length != (prevNumber * pageSize) + 2) {
+            if (body.rows[body.rows.length - 1].key === pages[pages.length - 1]) {
+              // Start page is the actually the last recorded
+              pages[pages.length - 1] = null;
+            } else if (pages.length > 0) {
+              // Start page is an additional one
+              pages.push(null);
+            }
+          }
+          previousDef.resolve(pages);
+        }, function (err) {
+          previousDef.reject(err);
         });
       } else {
         previousDef.resolve([]);
