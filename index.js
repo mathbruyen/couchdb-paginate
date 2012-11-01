@@ -3,7 +3,9 @@
 
 var nano = require('nano');
 var when = require('when');
-
+// # CouchDB pagination
+//
+// [Connect](http://www.senchalabs.org/connect/) middleware for paginated [CouchDB](https://couchdb.apache.org/) views.
 module.exports = function (config) {
   // ## Configuration options
   //
@@ -68,11 +70,14 @@ module.exports = function (config) {
   }
   // ### Way to display content
   //
-  // * `asJson`: sends the content as JSON (if set to `true` then `renderView` will be ignored)
-  // * `renderView`: view to render with data (if this and `asJson` are not specified, inserts the content on the request and let other middleware handle it)
+  // * `asJson` (default: `false`): sends the content as JSON (if set to `true` then `renderView` will be ignored)
+  // * `renderView`: view to render with data (ignored if `asJson` is set to `true`)
   // * `documentsExportKey` (default: `documents`): key in the content that holds the array of elements to display
   // * `nextExportKey` (default: `nextIds`): key in the content that holds the array of next start identifiers
   // * `previousExportKey` (default: `previousIds`): key in the content that holds the array of previous start identifiers
+  //
+  // By default content is simply added to the request object at specified keys, and next middleware can handle it.
+  // However there are two possible shortcuts: directly send the JSON content, or render a view with content.
   var asJson = config.asJson || false;
   if (typeof asJson != 'boolean') {
     throw new TypeError('"asJson" is not a boolean');
@@ -93,23 +98,27 @@ module.exports = function (config) {
   if (typeof previousExportKey != 'string') {
     throw new TypeError('"previousExportKey" is not a string');
   }
-  // ## Helper to query the view
+  // ## Helper to query the database
   function query(startkey, endkey, limit, include_docs, descending) {
+    // General data, allowing not to specify `include_docs` or `descending`.
     var obj = {
       limit: limit
     };
-    if (startkey !== undefined) {
-      obj.startkey = startkey;
-    }
-    if (endkey !== undefined) {
-      obj.endkey = endkey;
-    }
     if (include_docs) {
       obj.include_docs = true;
     }
     if (descending) {
       obj.descending = true;
     }
+    // In case the start key is undefined (start page with no lowest key), do not include it in the request.
+    if (startkey !== undefined) {
+      obj.startkey = startkey;
+    }
+    // In case the end key is undefined (no lowest key or no uppermost key), do not include it in the request.
+    if (endkey !== undefined) {
+      obj.endkey = endkey;
+    }
+    // Do the query and return a promise that holds the body.
     var deferred = when.defer();
     db.view(design, view, obj, function (err, body) {
       if (err) {
@@ -130,29 +139,25 @@ module.exports = function (config) {
       if (startKey === undefined) {
         startKey = lowestKey;
       }
+      // When fetching documents, use different requests to get next pages start keys and documents to limit response
+      // size. Otherzise the content would be fetched anyway so get documents and next pages start keys in one request.
       if (useDocuments) {
-        // Use different requests to get next pages start keys and documents to limit response size
-        query(startKey, uppermostKey, pageSize, true, false).then(function (body) {
+        query(startKey, uppermostKey, pageSize, true).then(function (body) {
+          // Prevent empty pages.
           if (body.rows.length === 0) {
             documentsDef.reject('No document found');
             nextDef.reject('No document found');
           } else {
-            documentsDef.resolve(body.rows.map(function (item) { return item.value; }));/* TODO take document instead of value */
+            documentsDef.resolve(body.rows.map(function (item) { return item.doc; }));
             if (body.rows.length === pageSize) {
-              db.view(design, view, {
-                startkey: body.rows[body.rows.length - 1].key,
-                endkey: uppermostKey,
-                limit: (pageSize * (nextNumber - 1)) + 2
-              }, function (err, body) {
-                if (err) {
-                  nextDef.reject(err);
-                } else {
-                  var pages = [];
-                  for (var i = 0; i < body.rows.length; i += pageSize) {
-                    pages.push(body.rows[i].key);
-                  }
-                  nextDef.resolve(pages);
+              query(body.rows[body.rows.length - 1].key, uppermostKey, (pageSize * (nextNumber - 1)) + 2).then(function (body) {
+                var pages = [];
+                for (var i = 1; i < body.rows.length; i += pageSize) {
+                  pages.push(body.rows[i].key);
                 }
+                nextDef.resolve(pages);
+              }, function (err) {
+                nextDef.reject(err);
               });
             } else {
               // There are not enought result to even fully populate this page
