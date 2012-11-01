@@ -56,4 +56,48 @@ describe('Paginate', function () {
       })(req, res, next);
     });
   });
+  it('should return all next results if not there are less than page size', function (done) {
+    devdb.load([
+      { key: 1, value: 'Foo1' },
+      { key: 2, value: 'Foo2' },
+      { key: 3, value: 'Foo3' },
+      { key: 4, value: 'Foo4' },
+      { key: 5, value: 'Foo5' }
+    ], [{
+      key: '_design/testdesign',
+      doc: {
+        views: {
+          testview: {
+            map: 'function (doc) { emit(doc.key, doc.value); }'
+          }
+        }
+      }
+    }]).then(function (dbname) {
+      var req = {
+        params: {
+          start: 4
+        }
+      };
+      var res = {};
+      var next = function (err) {
+        if (err) {
+          done(err);
+        }
+        assert.equal(2, req.documents.length);
+        assert.equal('Foo4', req.documents[0]);
+        assert.equal('Foo5', req.documents[1]);
+        assert.equal(0, req.nextIds.length);
+        assert.equal(1, req.previousIds.length);
+        assert.equal(null, req.previousIds[0]);
+        done();
+      };
+      paginate({
+        couchURI: 'http://localhost:5984',
+        database: dbname,
+        design: 'testdesign',
+        view: 'testview',
+        pageSize: 3
+      })(req, res, next);
+    });
+  });
 });
