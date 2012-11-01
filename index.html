@@ -1,0 +1,335 @@
+<!DOCTYPE html>  <html> <head>   <title>index.js</title>   <meta http-equiv="content-type" content="text/html; charset=UTF-8">   <link rel="stylesheet" media="all" href="docco.css" /> </head> <body>   <div id="container">     <div id="background"></div>          <table cellpadding="0" cellspacing="0">       <thead>         <tr>           <th class="docs">             <h1>               index.js             </h1>           </th>           <th class="code">           </th>         </tr>       </thead>       <tbody>                               <tr id="section-1">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-1">&#182;</a>               </div>               <p>(c) Mathieu Bruyen - http://mais-h.eu/
+License: MIT (http://www.opensource.org/licenses/mit-license.php)</p>             </td>             <td class="code">               <div class="highlight"><pre><span class="kd">var</span> <span class="nx">nano</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s1">&#39;nano&#39;</span><span class="p">);</span>
+<span class="kd">var</span> <span class="nx">when</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s1">&#39;when&#39;</span><span class="p">);</span>
+<span class="kd">var</span> <span class="nx">apply</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s1">&#39;when/apply&#39;</span><span class="p">);</span></pre></div>             </td>           </tr>                               <tr id="section-2">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-2">&#182;</a>               </div>               <h1>CouchDB pagination</h1>
+
+<p><a href="http://www.senchalabs.org/connect/">Connect</a> middleware for paginated <a href="https://couchdb.apache.org/">CouchDB</a> views.
+Inspired from <a href="http://guide.couchdb.org/draft/recipes.html#pagination">CouchDB guide</a>, but left the dealbreaker part
+out (expects keys to be unique, either emitted by only one document or reduced).</p>
+
+<h2>Examples</h2>
+
+<h3>Reduced values</h3>
+
+<p>View with both a <code>map</code> and a reduce function:</p>
+
+<pre><code>var paginate = require('couchdb-paginate');
+app.get('/list/:start', paginate({
+  couchURI: 'http://localhost:5984',
+  database: 'dbname',
+  design: 'mydesign',
+  view: 'myview'
+}), function (req, res, next) { /* display */ });
+</code></pre>
+
+<h3>Indexed documents</h3>
+
+<p>View with only a <code>map</code> function like <code>function (doc) { emit(doc.key, null); }</code>:</p>
+
+<pre><code>var paginate = require('couchdb-paginate');
+app.get('/list/:start', paginate({
+  couchURI: 'http://localhost:5984',
+  database: 'dbname',
+  design: 'mydesign',
+  view: 'myview',
+  useDocuments: true
+}), function (req, res, next) { /* display */ });
+</code></pre>
+
+<h3>API access (JSON)</h3>
+
+<p>View with only a <code>map</code> function like <code>function (doc) { emit(doc.key, null); }</code>:</p>
+
+<pre><code>var paginate = require('couchdb-paginate');
+app.get('/api/list/:start', paginate({
+  couchURI: 'http://localhost:5984',
+  database: 'dbname',
+  design: 'mydesign',
+  view: 'myview',
+  asJson: true
+}));
+</code></pre>
+
+<h3>View displaying</h3>
+
+<p>View with only a <code>map</code> function like <code>function (doc) { emit(doc.key, null); }</code>:</p>
+
+<pre><code>var paginate = require('couchdb-paginate');
+app.get('/list/:start', paginate({
+  couchURI: 'http://localhost:5984',
+  database: 'dbname',
+  design: 'mydesign',
+  view: 'myview',
+  renderView: 'myview.jade'
+}));
+</code></pre>
+
+<h3>Complex keys</h3>
+
+<p>Blog posts example: comments attached to posts, organized by timestamp.</p>
+
+<p>Document example:</p>
+
+<pre><code>{ postId: "abcdef", timestamp: 1234, author: "Foo", comment: "Bar" }
+</code></pre>
+
+<p>Map function (no reduce function):</p>
+
+<pre><code>function (doc) { emit([doc.postId, doc.timestamp], null); }
+</code></pre>
+
+<p>Pagination of comments for a given post exposed as an JSON API:</p>
+
+<pre><code>var paginate = require('couchdb-paginate');
+app.get('/comments/:post/:startTimestamp', paginate({
+  couchURI: 'http://localhost:5984',
+  database: 'dbname',
+  design: 'blogposts',
+  view: 'comments_by_post',
+  useDocuments: true
+  asJson: true,
+  getBounds: function (req) {
+    return [
+      [req.params.post, 0],
+      [req.params.post, req.params.startTimestamp],
+      [req.params.post, 9007199254740992]
+    ];
+  }
+}));
+</code></pre>             </td>             <td class="code">               <div class="highlight"><pre><span class="nx">module</span><span class="p">.</span><span class="nx">exports</span> <span class="o">=</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">config</span><span class="p">)</span> <span class="p">{</span></pre></div>             </td>           </tr>                               <tr id="section-3">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-3">&#182;</a>               </div>               <h2>Configuration options</h2>
+
+<h3>Connection to the database</h3>
+
+<ul>
+<li><code>couchURI</code>: URI of the CouchDB store</li>
+<li><code>database</code>: CouchDB database name</li>
+<li><code>design</code>: design name in couchdb</li>
+<li><code>view</code>: view name in design</li>
+</ul>             </td>             <td class="code">               <div class="highlight"><pre>  <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">config</span><span class="p">.</span><span class="nx">couchURI</span> <span class="o">!=</span> <span class="s1">&#39;string&#39;</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">throw</span> <span class="k">new</span> <span class="nx">TypeError</span><span class="p">(</span><span class="s1">&#39;&quot;couchURI&quot; is not a string&#39;</span><span class="p">);</span>
+  <span class="p">}</span>
+  <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">config</span><span class="p">.</span><span class="nx">database</span> <span class="o">!=</span> <span class="s1">&#39;string&#39;</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">throw</span> <span class="k">new</span> <span class="nx">TypeError</span><span class="p">(</span><span class="s1">&#39;&quot;database&quot; is not a string&#39;</span><span class="p">);</span>
+  <span class="p">}</span>
+  <span class="kd">var</span> <span class="nx">db</span> <span class="o">=</span> <span class="nx">nano</span><span class="p">(</span><span class="nx">config</span><span class="p">.</span><span class="nx">couchURI</span><span class="p">).</span><span class="nx">use</span><span class="p">(</span><span class="nx">config</span><span class="p">.</span><span class="nx">database</span><span class="p">);</span>
+  <span class="kd">var</span> <span class="nx">design</span> <span class="o">=</span> <span class="nx">config</span><span class="p">.</span><span class="nx">design</span><span class="p">;</span>
+  <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">design</span> <span class="o">!=</span> <span class="s1">&#39;string&#39;</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">throw</span> <span class="k">new</span> <span class="nx">TypeError</span><span class="p">(</span><span class="s1">&#39;&quot;design&quot; is not a string&#39;</span><span class="p">);</span>
+  <span class="p">}</span>
+  <span class="kd">var</span> <span class="nx">view</span> <span class="o">=</span> <span class="nx">config</span><span class="p">.</span><span class="nx">view</span><span class="p">;</span>
+  <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">view</span> <span class="o">!=</span> <span class="s1">&#39;string&#39;</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">throw</span> <span class="k">new</span> <span class="nx">TypeError</span><span class="p">(</span><span class="s1">&#39;&quot;view&quot; is not a string&#39;</span><span class="p">);</span>
+  <span class="p">}</span></pre></div>             </td>           </tr>                               <tr id="section-4">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-4">&#182;</a>               </div>               <h3>Bounds and navigation</h3>
+
+<ul>
+<li><code>getStartKey</code> (default: fetch from query parameter called <code>start</code>): how to get requested start key from the request</li>
+<li><code>getBounds</code> (default: no limits and start key from <code>getStartKey</code>): how to get navigation bounds from the request (if set then <code>getStartKey</code> will be ignored)</li>
+</ul>
+
+<p>Get bounds is expected to return an array (or a promise that will resolve an array) with three elements:
+* the lowest key to display
+* the current page start key
+* the highest key to display
+By default it uses no limits and take start key from request parameter <code>start</code>. Can be used to have more complex
+keys.</p>             </td>             <td class="code">               <div class="highlight"><pre>  <span class="kd">var</span> <span class="nx">getBounds</span><span class="p">;</span>
+  <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">config</span><span class="p">.</span><span class="nx">getBounds</span> <span class="o">==</span> <span class="s1">&#39;function&#39;</span><span class="p">)</span> <span class="p">{</span>
+    <span class="nx">getBounds</span> <span class="o">=</span> <span class="nx">config</span><span class="p">.</span><span class="nx">getBounds</span><span class="p">;</span>
+  <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">config</span><span class="p">.</span><span class="nx">getBounds</span> <span class="o">==</span> <span class="s1">&#39;undefined&#39;</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">config</span><span class="p">.</span><span class="nx">getStartKey</span> <span class="o">==</span> <span class="s1">&#39;function&#39;</span><span class="p">)</span> <span class="p">{</span>
+      <span class="kd">var</span> <span class="nx">getStartKey</span> <span class="o">=</span> <span class="nx">config</span><span class="p">.</span><span class="nx">getStartKey</span><span class="p">;</span>
+      <span class="nx">getBounds</span> <span class="o">=</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">req</span><span class="p">)</span> <span class="p">{</span> <span class="k">return</span> <span class="p">[</span><span class="kc">undefined</span><span class="p">,</span> <span class="nx">getStartKey</span><span class="p">(</span><span class="nx">req</span><span class="p">),</span> <span class="kc">undefined</span><span class="p">];</span> <span class="p">};</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">config</span><span class="p">.</span><span class="nx">getBounds</span> <span class="o">==</span> <span class="s1">&#39;undefined&#39;</span><span class="p">)</span> <span class="p">{</span>
+      <span class="nx">getBounds</span> <span class="o">=</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">req</span><span class="p">)</span> <span class="p">{</span> <span class="k">return</span> <span class="p">[</span><span class="kc">undefined</span><span class="p">,</span> <span class="nx">req</span><span class="p">.</span><span class="nx">params</span><span class="p">.</span><span class="nx">start</span><span class="p">,</span> <span class="kc">undefined</span><span class="p">];</span> <span class="p">};</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+      <span class="k">throw</span> <span class="k">new</span> <span class="nx">TypeError</span><span class="p">(</span><span class="s1">&#39;&quot;getStartKey&quot; is not a function&#39;</span><span class="p">);</span>
+    <span class="p">}</span>
+  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+    <span class="k">throw</span> <span class="k">new</span> <span class="nx">TypeError</span><span class="p">(</span><span class="s1">&#39;&quot;getBounds&quot; is not a function&#39;</span><span class="p">);</span>
+  <span class="p">}</span></pre></div>             </td>           </tr>                               <tr id="section-5">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-5">&#182;</a>               </div>               <h3>Content to display</h3>
+
+<ul>
+<li><code>pageSize</code> (default: <code>20</code>): number of items per page</li>
+<li><code>nextNumber</code> (default: <code>1</code>): number of next links to compute</li>
+<li><code>prevNumber</code> (default: the value of <code>nextNumber</code>): number of previous links to compute</li>
+<li><code>useDocuments</code> (default: <code>false</code>): use documents instead of reduced values</li>
+<li><code>reduce</code> (default: opposite of <code>useDocuments</code>): informs that there is a reduce function in the view</li>
+</ul>
+
+<p>By default it assumes that the view is a complete one with a reduce function and uses the reduced value as
+content. By setting <code>useDocuments</code> to <code>false</code>, it works on indexing views with no emitted value
+(<code>emit(doc.myKey, null)</code>) and in that case it assumes there is no reduce function. By explicitely setting
+<code>reduce</code> to <code>false</code>, it allows to work with views that emit a value but do not use a reduce function.</p>             </td>             <td class="code">               <div class="highlight"><pre>  <span class="kd">var</span> <span class="nx">pageSize</span> <span class="o">=</span> <span class="nx">config</span><span class="p">.</span><span class="nx">pageSize</span> <span class="o">||</span> <span class="mi">20</span><span class="p">;</span>
+  <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">pageSize</span> <span class="o">!=</span> <span class="s1">&#39;number&#39;</span> <span class="o">||</span> <span class="nb">isNaN</span><span class="p">(</span><span class="nx">pageSize</span><span class="p">)</span> <span class="o">||</span> <span class="nb">Math</span><span class="p">.</span><span class="nx">floor</span><span class="p">(</span><span class="nx">pageSize</span><span class="p">)</span> <span class="o">!==</span> <span class="nx">pageSize</span> <span class="o">||</span> <span class="nx">pageSize</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">throw</span> <span class="k">new</span> <span class="nx">TypeError</span><span class="p">(</span><span class="s1">&#39;&quot;pageSize&quot; is not a strictly positive integer&#39;</span><span class="p">);</span>
+  <span class="p">}</span>
+  <span class="kd">var</span> <span class="nx">nextNumber</span> <span class="o">=</span> <span class="nx">config</span><span class="p">.</span><span class="nx">nextNumber</span> <span class="o">||</span> <span class="mi">1</span><span class="p">;</span>
+  <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">nextNumber</span> <span class="o">!=</span> <span class="s1">&#39;number&#39;</span> <span class="o">||</span> <span class="nb">isNaN</span><span class="p">(</span><span class="nx">nextNumber</span><span class="p">)</span> <span class="o">||</span> <span class="nb">Math</span><span class="p">.</span><span class="nx">floor</span><span class="p">(</span><span class="nx">nextNumber</span><span class="p">)</span> <span class="o">!==</span> <span class="nx">nextNumber</span> <span class="o">||</span> <span class="nx">nextNumber</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">throw</span> <span class="k">new</span> <span class="nx">TypeError</span><span class="p">(</span><span class="s1">&#39;&quot;nextNumber&quot; is not a positive integer&#39;</span><span class="p">);</span>
+  <span class="p">}</span>
+  <span class="kd">var</span> <span class="nx">prevNumber</span> <span class="o">=</span> <span class="nx">config</span><span class="p">.</span><span class="nx">prevNumber</span> <span class="o">||</span> <span class="nx">nextNumber</span><span class="p">;</span>
+  <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">prevNumber</span> <span class="o">!=</span> <span class="s1">&#39;number&#39;</span> <span class="o">||</span> <span class="nb">isNaN</span><span class="p">(</span><span class="nx">prevNumber</span><span class="p">)</span> <span class="o">||</span> <span class="nb">Math</span><span class="p">.</span><span class="nx">floor</span><span class="p">(</span><span class="nx">prevNumber</span><span class="p">)</span> <span class="o">!==</span> <span class="nx">prevNumber</span> <span class="o">||</span> <span class="nx">prevNumber</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">throw</span> <span class="k">new</span> <span class="nx">TypeError</span><span class="p">(</span><span class="s1">&#39;&quot;prevNumber&quot; is not a positive integer&#39;</span><span class="p">);</span>
+  <span class="p">}</span>
+  <span class="kd">var</span> <span class="nx">useDocuments</span> <span class="o">=</span> <span class="nx">config</span><span class="p">.</span><span class="nx">useDocuments</span> <span class="o">||</span> <span class="kc">false</span><span class="p">;</span>
+  <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">useDocuments</span> <span class="o">!=</span> <span class="s1">&#39;boolean&#39;</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">throw</span> <span class="k">new</span> <span class="nx">TypeError</span><span class="p">(</span><span class="s1">&#39;&quot;useDocuments&quot; is not a boolean&#39;</span><span class="p">);</span>
+  <span class="p">}</span>
+  <span class="kd">var</span> <span class="nx">reduce</span><span class="p">;</span>
+  <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">config</span><span class="p">.</span><span class="nx">reduce</span> <span class="o">==</span> <span class="s1">&#39;undefined&#39;</span><span class="p">)</span> <span class="p">{</span>
+    <span class="nx">reduce</span> <span class="o">=</span> <span class="o">!</span><span class="nx">useDocuments</span><span class="p">;</span>
+  <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">config</span><span class="p">.</span><span class="nx">reduce</span> <span class="o">==</span> <span class="s1">&#39;boolean&#39;</span><span class="p">)</span> <span class="p">{</span>
+    <span class="nx">reduce</span> <span class="o">=</span> <span class="nx">config</span><span class="p">.</span><span class="nx">reduce</span><span class="p">;</span>
+  <span class="p">}</span>
+  <span class="k">else</span> <span class="p">{</span>
+    <span class="k">throw</span> <span class="k">new</span> <span class="nx">TypeError</span><span class="p">(</span><span class="s1">&#39;&quot;reduce&quot; is not a boolean&#39;</span><span class="p">);</span>
+  <span class="p">}</span></pre></div>             </td>           </tr>                               <tr id="section-6">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-6">&#182;</a>               </div>               <h3>Way to display content</h3>
+
+<ul>
+<li><code>asJson</code> (default: <code>false</code>): sends the content as JSON (if set to <code>true</code> then <code>renderView</code> will be ignored)</li>
+<li><code>renderView</code>: view to render with data (ignored if <code>asJson</code> is set to <code>true</code>)</li>
+<li><code>documentsExportKey</code> (default: <code>documents</code>): key in the content that holds the array of elements to display</li>
+<li><code>nextExportKey</code> (default: <code>nextIds</code>): key in the content that holds the array of next start identifiers</li>
+<li><code>previousExportKey</code> (default: <code>previousIds</code>): key in the content that holds the array of previous start identifiers</li>
+</ul>
+
+<p>By default content is simply added to the request object at specified keys, and next middleware can handle it.
+However there are two possible shortcuts: directly send the JSON content, or render a view with content.</p>             </td>             <td class="code">               <div class="highlight"><pre>  <span class="kd">var</span> <span class="nx">asJson</span> <span class="o">=</span> <span class="nx">config</span><span class="p">.</span><span class="nx">asJson</span> <span class="o">||</span> <span class="kc">false</span><span class="p">;</span>
+  <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">asJson</span> <span class="o">!=</span> <span class="s1">&#39;boolean&#39;</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">throw</span> <span class="k">new</span> <span class="nx">TypeError</span><span class="p">(</span><span class="s1">&#39;&quot;asJson&quot; is not a boolean&#39;</span><span class="p">);</span>
+  <span class="p">}</span>
+  <span class="kd">var</span> <span class="nx">renderView</span> <span class="o">=</span> <span class="nx">config</span><span class="p">.</span><span class="nx">renderView</span> <span class="o">||</span> <span class="kc">null</span><span class="p">;</span>
+  <span class="k">if</span> <span class="p">(</span><span class="nx">renderView</span> <span class="o">!==</span> <span class="kc">null</span> <span class="o">&amp;&amp;</span> <span class="k">typeof</span> <span class="nx">renderView</span> <span class="o">!=</span> <span class="s1">&#39;string&#39;</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">throw</span> <span class="k">new</span> <span class="nx">TypeError</span><span class="p">(</span><span class="s1">&#39;&quot;renderView&quot; is not a string&#39;</span><span class="p">);</span>
+  <span class="p">}</span>
+  <span class="kd">var</span> <span class="nx">documentsExportKey</span> <span class="o">=</span> <span class="nx">config</span><span class="p">.</span><span class="nx">documentsExportKey</span> <span class="o">||</span> <span class="s1">&#39;documents&#39;</span><span class="p">;</span>
+  <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">documentsExportKey</span> <span class="o">!=</span> <span class="s1">&#39;string&#39;</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">throw</span> <span class="k">new</span> <span class="nx">TypeError</span><span class="p">(</span><span class="s1">&#39;&quot;documentsExportKey&quot; is not a string&#39;</span><span class="p">);</span>
+  <span class="p">}</span>
+  <span class="kd">var</span> <span class="nx">nextExportKey</span> <span class="o">=</span> <span class="nx">config</span><span class="p">.</span><span class="nx">nextExportKey</span> <span class="o">||</span> <span class="s1">&#39;nextIds&#39;</span><span class="p">;</span>
+  <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">nextExportKey</span> <span class="o">!=</span> <span class="s1">&#39;string&#39;</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">throw</span> <span class="k">new</span> <span class="nx">TypeError</span><span class="p">(</span><span class="s1">&#39;&quot;nextExportKey&quot; is not a string&#39;</span><span class="p">);</span>
+  <span class="p">}</span>
+  <span class="kd">var</span> <span class="nx">previousExportKey</span> <span class="o">=</span> <span class="nx">config</span><span class="p">.</span><span class="nx">previousExportKey</span> <span class="o">||</span> <span class="s1">&#39;previousIds&#39;</span><span class="p">;</span>
+  <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">previousExportKey</span> <span class="o">!=</span> <span class="s1">&#39;string&#39;</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">throw</span> <span class="k">new</span> <span class="nx">TypeError</span><span class="p">(</span><span class="s1">&#39;&quot;previousExportKey&quot; is not a string&#39;</span><span class="p">);</span>
+  <span class="p">}</span></pre></div>             </td>           </tr>                               <tr id="section-7">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-7">&#182;</a>               </div>               <h2>Helper to query the database</h2>             </td>             <td class="code">               <div class="highlight"><pre>  <span class="kd">function</span> <span class="nx">query</span><span class="p">(</span><span class="nx">startkey</span><span class="p">,</span> <span class="nx">endkey</span><span class="p">,</span> <span class="nx">limit</span><span class="p">,</span> <span class="nx">include_docs</span><span class="p">,</span> <span class="nx">descending</span><span class="p">)</span> <span class="p">{</span></pre></div>             </td>           </tr>                               <tr id="section-8">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-8">&#182;</a>               </div>               <p>General data, allowing not to specify <code>include_docs</code> or <code>descending</code>.</p>             </td>             <td class="code">               <div class="highlight"><pre>    <span class="kd">var</span> <span class="nx">obj</span> <span class="o">=</span> <span class="p">{</span>
+      <span class="nx">limit</span><span class="o">:</span> <span class="nx">limit</span>
+    <span class="p">};</span>
+    <span class="k">if</span> <span class="p">(</span><span class="nx">reduce</span><span class="p">)</span> <span class="p">{</span>
+      <span class="nx">obj</span><span class="p">.</span><span class="nx">group</span> <span class="o">=</span> <span class="kc">true</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="p">(</span><span class="nx">include_docs</span><span class="p">)</span> <span class="p">{</span>
+      <span class="nx">obj</span><span class="p">.</span><span class="nx">include_docs</span> <span class="o">=</span> <span class="kc">true</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="p">(</span><span class="nx">descending</span><span class="p">)</span> <span class="p">{</span>
+      <span class="nx">obj</span><span class="p">.</span><span class="nx">descending</span> <span class="o">=</span> <span class="kc">true</span><span class="p">;</span>
+    <span class="p">}</span></pre></div>             </td>           </tr>                               <tr id="section-9">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-9">&#182;</a>               </div>               <p>In case the start key is undefined (start page with no lowest key), do not include it in the request.</p>             </td>             <td class="code">               <div class="highlight"><pre>    <span class="k">if</span> <span class="p">(</span><span class="nx">startkey</span> <span class="o">!==</span> <span class="kc">undefined</span><span class="p">)</span> <span class="p">{</span>
+      <span class="nx">obj</span><span class="p">.</span><span class="nx">startkey</span> <span class="o">=</span> <span class="nx">startkey</span><span class="p">;</span>
+    <span class="p">}</span></pre></div>             </td>           </tr>                               <tr id="section-10">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-10">&#182;</a>               </div>               <p>In case the end key is undefined (no lowest key or no uppermost key), do not include it in the request.</p>             </td>             <td class="code">               <div class="highlight"><pre>    <span class="k">if</span> <span class="p">(</span><span class="nx">endkey</span> <span class="o">!==</span> <span class="kc">undefined</span><span class="p">)</span> <span class="p">{</span>
+      <span class="nx">obj</span><span class="p">.</span><span class="nx">endkey</span> <span class="o">=</span> <span class="nx">endkey</span><span class="p">;</span>
+    <span class="p">}</span></pre></div>             </td>           </tr>                               <tr id="section-11">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-11">&#182;</a>               </div>               <p>Do the query and return a promise that holds the body.</p>             </td>             <td class="code">               <div class="highlight"><pre>    <span class="kd">var</span> <span class="nx">deferred</span> <span class="o">=</span> <span class="nx">when</span><span class="p">.</span><span class="nx">defer</span><span class="p">();</span>
+    <span class="nx">db</span><span class="p">.</span><span class="nx">view</span><span class="p">(</span><span class="nx">design</span><span class="p">,</span> <span class="nx">view</span><span class="p">,</span> <span class="nx">obj</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">body</span><span class="p">)</span> <span class="p">{</span>
+      <span class="k">if</span> <span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nx">deferred</span><span class="p">.</span><span class="nx">reject</span><span class="p">(</span><span class="nx">err</span><span class="p">);</span>
+      <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="nx">deferred</span><span class="p">.</span><span class="nx">resolve</span><span class="p">(</span><span class="nx">body</span><span class="p">);</span>
+      <span class="p">}</span>
+    <span class="p">});</span>
+    <span class="k">return</span> <span class="nx">deferred</span><span class="p">.</span><span class="nx">promise</span><span class="p">;</span>
+  <span class="p">}</span></pre></div>             </td>           </tr>                               <tr id="section-12">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-12">&#182;</a>               </div>               <h2>Actual middleware</h2>             </td>             <td class="code">               <div class="highlight"><pre>  <span class="k">return</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">,</span> <span class="nx">next</span><span class="p">)</span> <span class="p">{</span>
+    <span class="nx">when</span><span class="p">(</span><span class="nx">getBounds</span><span class="p">(</span><span class="nx">req</span><span class="p">)).</span><span class="nx">then</span><span class="p">(</span><span class="nx">apply</span><span class="p">(</span><span class="kd">function</span> <span class="p">(</span><span class="nx">lowestKey</span><span class="p">,</span> <span class="nx">startKey</span><span class="p">,</span> <span class="nx">uppermostKey</span><span class="p">)</span> <span class="p">{</span>
+      <span class="kd">var</span> <span class="nx">nextDef</span> <span class="o">=</span> <span class="nx">when</span><span class="p">.</span><span class="nx">defer</span><span class="p">();</span>
+      <span class="kd">var</span> <span class="nx">previousDef</span> <span class="o">=</span> <span class="nx">when</span><span class="p">.</span><span class="nx">defer</span><span class="p">();</span>
+      <span class="kd">var</span> <span class="nx">documentsDef</span> <span class="o">=</span> <span class="nx">when</span><span class="p">.</span><span class="nx">defer</span><span class="p">();</span></pre></div>             </td>           </tr>                               <tr id="section-13">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-13">&#182;</a>               </div>               <p>If start key is not provided, then use the lowermost one to get start page.</p>             </td>             <td class="code">               <div class="highlight"><pre>      <span class="k">if</span> <span class="p">(</span><span class="nx">startKey</span> <span class="o">===</span> <span class="kc">undefined</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nx">startKey</span> <span class="o">=</span> <span class="nx">lowestKey</span><span class="p">;</span>
+      <span class="p">}</span></pre></div>             </td>           </tr>                               <tr id="section-14">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-14">&#182;</a>               </div>               <p>When fetching documents, use different requests to get next pages start keys and documents to limit response
+size. Otherzise the content would be fetched anyway so get documents and next pages start keys in one request.</p>             </td>             <td class="code">               <div class="highlight"><pre>      <span class="k">if</span> <span class="p">(</span><span class="nx">useDocuments</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nx">query</span><span class="p">(</span><span class="nx">startKey</span><span class="p">,</span> <span class="nx">uppermostKey</span><span class="p">,</span> <span class="nx">pageSize</span><span class="p">,</span> <span class="kc">true</span><span class="p">).</span><span class="nx">then</span><span class="p">(</span><span class="kd">function</span> <span class="p">(</span><span class="nx">body</span><span class="p">)</span> <span class="p">{</span></pre></div>             </td>           </tr>                               <tr id="section-15">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-15">&#182;</a>               </div>               <p>Prevent empty pages.</p>             </td>             <td class="code">               <div class="highlight"><pre>          <span class="k">if</span> <span class="p">(</span><span class="nx">body</span><span class="p">.</span><span class="nx">rows</span><span class="p">.</span><span class="nx">length</span> <span class="o">===</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+            <span class="nx">documentsDef</span><span class="p">.</span><span class="nx">reject</span><span class="p">(</span><span class="s1">&#39;No document found&#39;</span><span class="p">);</span>
+            <span class="nx">nextDef</span><span class="p">.</span><span class="nx">reject</span><span class="p">(</span><span class="s1">&#39;No document found&#39;</span><span class="p">);</span>
+          <span class="p">}</span> <span class="k">else</span> <span class="p">{</span></pre></div>             </td>           </tr>                               <tr id="section-16">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-16">&#182;</a>               </div>               <p>Select documents.</p>             </td>             <td class="code">               <div class="highlight"><pre>            <span class="nx">documentsDef</span><span class="p">.</span><span class="nx">resolve</span><span class="p">(</span><span class="nx">body</span><span class="p">.</span><span class="nx">rows</span><span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="kd">function</span> <span class="p">(</span><span class="nx">item</span><span class="p">)</span> <span class="p">{</span> <span class="k">return</span> <span class="nx">item</span><span class="p">.</span><span class="nx">doc</span><span class="p">;</span> <span class="p">}));</span></pre></div>             </td>           </tr>                               <tr id="section-17">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-17">&#182;</a>               </div>               <p>No need to compute next pages start keys if there are not enought result to even fully populate this page.</p>             </td>             <td class="code">               <div class="highlight"><pre>            <span class="k">if</span> <span class="p">(</span><span class="nx">body</span><span class="p">.</span><span class="nx">rows</span><span class="p">.</span><span class="nx">length</span> <span class="o">===</span> <span class="nx">pageSize</span><span class="p">)</span> <span class="p">{</span></pre></div>             </td>           </tr>                               <tr id="section-18">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-18">&#182;</a>               </div>               <p><code>nextNumber - 1</code> to include only the first document of the last path and <code>+ 2</code> because the last
+document of this page is also included.</p>             </td>             <td class="code">               <div class="highlight"><pre>              <span class="nx">query</span><span class="p">(</span><span class="nx">body</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="nx">body</span><span class="p">.</span><span class="nx">rows</span><span class="p">.</span><span class="nx">length</span> <span class="o">-</span> <span class="mi">1</span><span class="p">].</span><span class="nx">key</span><span class="p">,</span> <span class="nx">uppermostKey</span><span class="p">,</span> <span class="p">(</span><span class="nx">pageSize</span> <span class="o">*</span> <span class="p">(</span><span class="nx">nextNumber</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span> <span class="o">+</span> <span class="mi">2</span><span class="p">).</span><span class="nx">then</span><span class="p">(</span><span class="kd">function</span> <span class="p">(</span><span class="nx">body</span><span class="p">)</span> <span class="p">{</span>
+                <span class="kd">var</span> <span class="nx">pages</span> <span class="o">=</span> <span class="p">[];</span>
+                <span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="nx">body</span><span class="p">.</span><span class="nx">rows</span><span class="p">.</span><span class="nx">length</span><span class="p">;</span> <span class="nx">i</span> <span class="o">+=</span> <span class="nx">pageSize</span><span class="p">)</span> <span class="p">{</span>
+                  <span class="nx">pages</span><span class="p">.</span><span class="nx">push</span><span class="p">(</span><span class="nx">body</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="nx">i</span><span class="p">].</span><span class="nx">key</span><span class="p">);</span>
+                <span class="p">}</span>
+                <span class="nx">nextDef</span><span class="p">.</span><span class="nx">resolve</span><span class="p">(</span><span class="nx">pages</span><span class="p">);</span>
+              <span class="p">},</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="p">{</span>
+                <span class="nx">nextDef</span><span class="p">.</span><span class="nx">reject</span><span class="p">(</span><span class="nx">err</span><span class="p">);</span>
+              <span class="p">});</span>
+            <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+              <span class="nx">nextDef</span><span class="p">.</span><span class="nx">resolve</span><span class="p">([]);</span>
+            <span class="p">}</span>
+          <span class="p">}</span>
+        <span class="p">},</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="p">{</span>
+          <span class="nx">documentsDef</span><span class="p">.</span><span class="nx">reject</span><span class="p">(</span><span class="nx">err</span><span class="p">);</span>
+          <span class="nx">nextDef</span><span class="p">.</span><span class="nx">reject</span><span class="p">(</span><span class="nx">err</span><span class="p">);</span>
+        <span class="p">});</span></pre></div>             </td>           </tr>                               <tr id="section-19">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-19">&#182;</a>               </div>               <p>If no next pages are requested no need to query extra documents at all.</p>             </td>             <td class="code">               <div class="highlight"><pre>      <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="nx">nextNumber</span> <span class="o">===</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nx">nextDef</span><span class="p">.</span><span class="nx">resolve</span><span class="p">([]);</span>
+        <span class="nx">query</span><span class="p">(</span><span class="nx">startKey</span><span class="p">,</span> <span class="nx">uppermostKey</span><span class="p">,</span> <span class="nx">pageSize</span><span class="p">).</span><span class="nx">then</span><span class="p">(</span><span class="kd">function</span> <span class="p">(</span><span class="nx">body</span><span class="p">)</span> <span class="p">{</span></pre></div>             </td>           </tr>                               <tr id="section-20">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-20">&#182;</a>               </div>               <p>Prevent empty pages.</p>             </td>             <td class="code">               <div class="highlight"><pre>          <span class="k">if</span> <span class="p">(</span><span class="nx">body</span><span class="p">.</span><span class="nx">rows</span><span class="p">.</span><span class="nx">length</span> <span class="o">===</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+            <span class="nx">documentsDef</span><span class="p">.</span><span class="nx">reject</span><span class="p">(</span><span class="s1">&#39;No document found&#39;</span><span class="p">);</span>
+          <span class="p">}</span> <span class="k">else</span> <span class="p">{</span></pre></div>             </td>           </tr>                               <tr id="section-21">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-21">&#182;</a>               </div>               <p>Select reduced values.</p>             </td>             <td class="code">               <div class="highlight"><pre>            <span class="nx">documentsDef</span><span class="p">.</span><span class="nx">resolve</span><span class="p">(</span><span class="nx">body</span><span class="p">.</span><span class="nx">rows</span><span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="kd">function</span> <span class="p">(</span><span class="nx">item</span><span class="p">)</span> <span class="p">{</span> <span class="k">return</span> <span class="nx">item</span><span class="p">.</span><span class="nx">value</span><span class="p">;</span> <span class="p">}));</span>
+          <span class="p">}</span>
+        <span class="p">},</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="p">{</span>
+          <span class="nx">documentsDef</span><span class="p">.</span><span class="nx">reject</span><span class="p">(</span><span class="nx">err</span><span class="p">);</span>
+        <span class="p">});</span>
+      <span class="p">}</span> <span class="k">else</span> <span class="p">{</span></pre></div>             </td>           </tr>                               <tr id="section-22">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-22">&#182;</a>               </div>               <p>Make a single big query to get both current page and next pages start keys.</p>             </td>             <td class="code">               <div class="highlight"><pre>        <span class="nx">query</span><span class="p">(</span><span class="nx">startKey</span><span class="p">,</span> <span class="nx">uppermostKey</span><span class="p">,</span> <span class="p">(</span><span class="nx">pageSize</span> <span class="o">*</span> <span class="nx">nextNumber</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">).</span><span class="nx">then</span><span class="p">(</span><span class="kd">function</span> <span class="p">(</span><span class="nx">body</span><span class="p">)</span> <span class="p">{</span></pre></div>             </td>           </tr>                               <tr id="section-23">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-23">&#182;</a>               </div>               <p>Prevent empty pages.</p>             </td>             <td class="code">               <div class="highlight"><pre>          <span class="k">if</span> <span class="p">(</span><span class="nx">body</span><span class="p">.</span><span class="nx">rows</span><span class="p">.</span><span class="nx">length</span> <span class="o">===</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+            <span class="nx">documentsDef</span><span class="p">.</span><span class="nx">reject</span><span class="p">(</span><span class="s1">&#39;No document found&#39;</span><span class="p">);</span>
+            <span class="nx">nextDef</span><span class="p">.</span><span class="nx">reject</span><span class="p">(</span><span class="s1">&#39;No document found&#39;</span><span class="p">);</span>
+          <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="kd">var</span> <span class="nx">documents</span> <span class="o">=</span> <span class="p">[];</span>
+            <span class="kd">var</span> <span class="nx">pages</span> <span class="o">=</span> <span class="p">[];</span>
+            <span class="kd">var</span> <span class="nx">i</span><span class="p">;</span></pre></div>             </td>           </tr>                               <tr id="section-24">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-24">&#182;</a>               </div>               <p>Select values only for the page range.</p>             </td>             <td class="code">               <div class="highlight"><pre>            <span class="k">for</span> <span class="p">(</span><span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="nx">pageSize</span> <span class="o">&amp;&amp;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="nx">body</span><span class="p">.</span><span class="nx">rows</span><span class="p">.</span><span class="nx">length</span><span class="p">;</span> <span class="nx">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+              <span class="nx">documents</span><span class="p">.</span><span class="nx">push</span><span class="p">(</span><span class="nx">body</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="nx">i</span><span class="p">].</span><span class="nx">value</span><span class="p">);</span>
+            <span class="p">}</span>
+            <span class="k">for</span> <span class="p">(</span><span class="nx">i</span> <span class="o">=</span> <span class="nx">pageSize</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="nx">body</span><span class="p">.</span><span class="nx">rows</span><span class="p">.</span><span class="nx">length</span><span class="p">;</span> <span class="nx">i</span> <span class="o">+=</span> <span class="nx">pageSize</span><span class="p">)</span> <span class="p">{</span>
+              <span class="nx">pages</span><span class="p">.</span><span class="nx">push</span><span class="p">(</span><span class="nx">body</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="nx">i</span><span class="p">].</span><span class="nx">key</span><span class="p">);</span>
+            <span class="p">}</span>
+            <span class="nx">documentsDef</span><span class="p">.</span><span class="nx">resolve</span><span class="p">(</span><span class="nx">documents</span><span class="p">);</span>
+            <span class="nx">nextDef</span><span class="p">.</span><span class="nx">resolve</span><span class="p">(</span><span class="nx">pages</span><span class="p">);</span>
+          <span class="p">}</span>
+        <span class="p">},</span> <span class="kd">function</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="p">{</span>
+          <span class="nx">documentsDef</span><span class="p">.</span><span class="nx">reject</span><span class="p">(</span><span class="nx">err</span><span class="p">);</span>
+          <span class="nx">nextDef</span><span class="p">.</span><span class="nx">reject</span><span class="p">(</span><span class="nx">err</span><span class="p">);</span>
+        <span class="p">});</span>
+      <span class="p">}</span></pre></div>             </td>           </tr>                               <tr id="section-25">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-25">&#182;</a>               </div>               <p>No need to query previous pages start keys if on the start page or if explicitely requested.</p>             </td>             <td class="code">               <div class="highlight"><pre>      <span class="k">if</span> <span class="p">((</span><span class="nx">prevNumber</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="p">(</span><span class="nx">startKey</span> <span class="o">!==</span> <span class="nx">lowestKey</span><span class="p">))</span> <span class="p">{</span></pre></div>             </td>           </tr>                               <tr id="section-26">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-26">&#182;</a>               </div>               <p>Find all previous pages. <code>+ 2</code> because the first key of the current page is included and that the existence
+of an extra document in order to detect first page properly.</p>             </td>             <td class="code">               <div class="highlight"><pre>        <span class="nx">query</span><span class="p">(</span><span class="nx">startKey</span><span class="p">,</span> <span class="nx">lowestKey</span><span class="p">,</span> <span class="p">(</span><span class="nx">prevNumber</span> <span class="o">*</span> <span class="nx">pageSize</span><span class="p">)</span> <span class="o">+</span> <span class="mi">2</span><span class="p">,</span> <span class="kc">false</span><span class="p">,</span> <span class="kc">true</span><span class="p">).</span><span class="nx">then</span><span class="p">(</span><span class="kd">function</span> <span class="p">(</span><span class="nx">body</span><span class="p">)</span> <span class="p">{</span>
+          <span class="kd">var</span> <span class="nx">pages</span> <span class="o">=</span> <span class="p">[];</span>
+          <span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="nx">pageSize</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="nx">body</span><span class="p">.</span><span class="nx">rows</span><span class="p">.</span><span class="nx">length</span> <span class="o">&amp;&amp;</span> <span class="nx">pages</span><span class="p">.</span><span class="nx">length</span> <span class="o">&lt;</span> <span class="nx">prevNumber</span><span class="p">;</span> <span class="nx">i</span> <span class="o">+=</span> <span class="nx">pageSize</span><span class="p">)</span> <span class="p">{</span>
+            <span class="nx">pages</span><span class="p">.</span><span class="nx">push</span><span class="p">(</span><span class="nx">body</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="nx">i</span><span class="p">].</span><span class="nx">key</span><span class="p">);</span>
+          <span class="p">}</span></pre></div>             </td>           </tr>                               <tr id="section-27">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-27">&#182;</a>               </div>               <p>If the response contains less items than expected then start page is included.</p>             </td>             <td class="code">               <div class="highlight"><pre>          <span class="k">if</span> <span class="p">(</span><span class="nx">body</span><span class="p">.</span><span class="nx">rows</span><span class="p">.</span><span class="nx">length</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="o">&amp;&amp;</span> <span class="nx">body</span><span class="p">.</span><span class="nx">rows</span><span class="p">.</span><span class="nx">length</span> <span class="o">!==</span> <span class="p">(</span><span class="nx">prevNumber</span> <span class="o">*</span> <span class="nx">pageSize</span><span class="p">)</span> <span class="o">+</span> <span class="mi">2</span><span class="p">)</span> <span class="p">{</span></pre></div>             </td>           </tr>                               <tr id="section-28">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-28">&#182;</a>               </div>               <p>Start page is actually the last one recorded (do not test for equality with lowestKey as the later may
+not exist at all).</p>             </td>             <td class="code">               <div class="highlight"><pre>            <span class="k">if</span> <span class="p">(</span><span class="nx">body</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="nx">body</span><span class="p">.</span><span class="nx">rows</span><span class="p">.</span><span class="nx">length</span> <span class="o">-</span> <span class="mi">1</span><span class="p">].</span><span class="nx">key</span> <span class="o">===</span> <span class="nx">pages</span><span class="p">[</span><span class="nx">pages</span><span class="p">.</span><span class="nx">length</span> <span class="o">-</span> <span class="mi">1</span><span class="p">])</span> <span class="p">{</span>
+              <span class="nx">pages</span><span class="p">[</span><span class="nx">pages</span><span class="p">.</span><span class="nx">length</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="kc">null</span><span class="p">;</span></pre></div>             </td>           </tr>                               <tr id="section-29">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-29">&#182;</a>               </div>               <p>Start page is an additional one if there is more than this page first element in the response.</p>             </td>             <td class="code">               <div class="highlight"><pre>            <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+              <span class="nx">pages</span><span class="p">.</span><span class="nx">push</span><span class="p">(</span><span class="kc">null</span><span class="p">);</span>
+            <span class="p">}</span>
+          <span class="p">}</span>
+          <span class="nx">previousDef</span><span class="p">.</span><span class="nx">resolve</span><span class="p">(</span><span class="nx">pages</span><span class="p">);</span>
+        <span class="p">},</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">err</span><span class="p">)</span> <span class="p">{</span>
+          <span class="nx">previousDef</span><span class="p">.</span><span class="nx">reject</span><span class="p">(</span><span class="nx">err</span><span class="p">);</span>
+        <span class="p">});</span>
+      <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="nx">previousDef</span><span class="p">.</span><span class="nx">resolve</span><span class="p">([]);</span>
+      <span class="p">}</span>
+      <span class="k">return</span> <span class="nx">when</span><span class="p">.</span><span class="nx">all</span><span class="p">([</span><span class="nx">previousDef</span><span class="p">.</span><span class="nx">promise</span><span class="p">,</span> <span class="nx">documentsDef</span><span class="p">.</span><span class="nx">promise</span><span class="p">,</span> <span class="nx">nextDef</span><span class="p">.</span><span class="nx">promise</span><span class="p">]).</span><span class="nx">then</span><span class="p">(</span><span class="kd">function</span> <span class="p">(</span><span class="nx">resolved</span><span class="p">)</span> <span class="p">{</span></pre></div>             </td>           </tr>                               <tr id="section-30">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-30">&#182;</a>               </div>               <p>Build the output.</p>             </td>             <td class="code">               <div class="highlight"><pre>        <span class="kd">var</span> <span class="nx">result</span><span class="p">;</span>
+        <span class="k">if</span> <span class="p">(</span><span class="nx">asJson</span> <span class="o">||</span> <span class="nx">renderView</span><span class="p">)</span> <span class="p">{</span>
+          <span class="nx">result</span> <span class="o">=</span> <span class="p">{};</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+          <span class="nx">result</span> <span class="o">=</span> <span class="nx">req</span><span class="p">;</span>
+        <span class="p">}</span>
+        <span class="nx">result</span><span class="p">[</span><span class="nx">previousExportKey</span><span class="p">]</span> <span class="o">=</span> <span class="nx">resolved</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span>
+        <span class="nx">result</span><span class="p">[</span><span class="nx">documentsExportKey</span><span class="p">]</span> <span class="o">=</span> <span class="nx">resolved</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>
+        <span class="nx">result</span><span class="p">[</span><span class="nx">nextExportKey</span><span class="p">]</span> <span class="o">=</span> <span class="nx">resolved</span><span class="p">[</span><span class="mi">2</span><span class="p">];</span></pre></div>             </td>           </tr>                               <tr id="section-31">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-31">&#182;</a>               </div>               <p>Terminate middleware working.</p>             </td>             <td class="code">               <div class="highlight"><pre>        <span class="k">if</span> <span class="p">(</span><span class="nx">asJson</span><span class="p">)</span> <span class="p">{</span>
+          <span class="nx">res</span><span class="p">.</span><span class="nx">json</span><span class="p">(</span><span class="nx">result</span><span class="p">);</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="nx">renderView</span><span class="p">)</span> <span class="p">{</span>
+          <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="nx">renderView</span><span class="p">,</span> <span class="nx">result</span><span class="p">);</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+          <span class="nx">next</span><span class="p">();</span>
+        <span class="p">}</span>
+      <span class="p">});</span>
+    <span class="p">})).</span><span class="nx">otherwise</span><span class="p">(</span><span class="kd">function</span> <span class="p">(</span><span class="nx">error</span><span class="p">)</span> <span class="p">{</span>
+      <span class="nx">next</span><span class="p">(</span><span class="nx">error</span><span class="p">);</span>
+    <span class="p">});</span>
+  <span class="p">};</span>
+<span class="p">};</span>
+
+</pre></div>             </td>           </tr>                </tbody>     </table>   </div> </body> </html> 
