@@ -40,9 +40,9 @@ describe('Paginate with reduced value and page size of 3', function () {
       done();
     });
   });
-  /*after(function (done) {
+  after(function (done) {
     devdb.stop().then(done);
-  });*/
+  });
   it('should return no prev link, 3 documents and 1 next link for default key', function (done) {
     var req = {
       params: {}
