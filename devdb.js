@@ -9,6 +9,8 @@ var exec = require('child_process').exec;
 var fs = require('fs');
 var when = require('when');
 
+var dbId = 1;
+
 // ### Preparation
 //
 // Database is stored in `db` directory.
@@ -70,20 +72,6 @@ module.exports = {
     exec(couchcommand + ' -k', { cwd: __dirname }, deferred.resolve);
     return deferred.promise;
   },
-  // #### Status
-  //
-  // Prints the status of the local database (running or stopped).
-  status: function () {
-    var deferred = when.defer();
-    exec(couchcommand + ' -s', { cwd: __dirname }, function (error) {
-      if (error) {
-        deferred.resolve('Not running');
-      } else {
-        deferred.resolve('Running');
-      }
-    });
-    return deferred.promise;
-  },
   // #### Devdb
   //
   // Cleans the local directory and spawns a new empty database.
@@ -95,26 +83,44 @@ module.exports = {
       fs.mkdirSync(dbdir);
       return module.exports.start();
     });
+  },
+  // #### Document pre loading
+  //
+  // Loads some documents in a freshly created database.
+  load: function (documents, nameds) {
+    var nano = require('nano')('http://localhost:5984');
+    var dbname = 'test' + (dbId++);
+    var deferred = when.defer();
+    nano.db.create(dbname, function () {
+      deferred.resolve(nano.use(dbname));
+    });
+    return deferred.promise.then(function (db) {
+      var promises = [];
+      documents.forEach(function (doc) {
+        var deferred = when.defer();
+        db.insert(doc, function (err, body) {
+          if (err) {
+            deferred.reject(err);
+          } else {
+            deferred.resolve();
+          }
+        });
+        promises.push(deferred.promise);
+      });
+      nameds.forEach(function (named) {
+        var deferred = when.defer();
+        db.insert(named.doc, named.key, function (err, body) {
+          if (err) {
+            deferred.reject(err);
+          } else {
+            deferred.resolve();
+          }
+        });
+        promises.push(deferred.promise);
+      });
+      return when.all(promises);
+    }).then(function () {
+      return dbname;
+    });
   }
 };
-
-// ### Execution
-//
-// Executes the script if direct invocation, do nothing otherwise to allow using it as a standard module.
-if (process.argv[1] === path.join(__dirname, 'devdb.js')) {
-  var func = module.exports[process.argv[2]];
-  if (func) {
-    func().then(function (value) {
-      if (value) {
-        console.log(value);
-      }
-      process.exit();
-    },function (err) {
-      console.log(err);
-      process.exit(1);
-    });
-  } else {
-    console.log('Usage: ./devdb.js {' + Object.keys(module.exports).join('|') + '}');
-    process.exit(1);
-  }
-}
