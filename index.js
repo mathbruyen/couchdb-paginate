@@ -148,8 +148,12 @@ module.exports = function (config) {
             documentsDef.reject('No document found');
             nextDef.reject('No document found');
           } else {
+            // Select documents.
             documentsDef.resolve(body.rows.map(function (item) { return item.doc; }));
+            // No need to compute next pages start keys if there are not enought result to even fully populate this page.
             if (body.rows.length === pageSize) {
+              // `nextNumber - 1` to include only the first document of the last path and `+ 2` because the last
+              // document of this page is also included.
               query(body.rows[body.rows.length - 1].key, uppermostKey, (pageSize * (nextNumber - 1)) + 2).then(function (body) {
                 var pages = [];
                 for (var i = 1; i < body.rows.length; i += pageSize) {
@@ -160,7 +164,6 @@ module.exports = function (config) {
                 nextDef.reject(err);
               });
             } else {
-              // There are not enought result to even fully populate this page
               nextDef.resolve([]);
             }
           }
@@ -168,19 +171,24 @@ module.exports = function (config) {
           documentsDef.reject(err);
           nextDef.reject(err);
         });
+      // If no next pages are requested no need to query extra documents at all.
       } else if (nextNumber === 0) {
         nextDef.resolve([]);
         query(startKey, uppermostKey, pageSize).then(function (body) {
+          // Prevent empty pages.
           if (body.rows.length === 0) {
             documentsDef.reject('No document found');
           } else {
+            // Select reduced values.
             documentsDef.resolve(body.rows.map(function (item) { return item.value; }));
           }
         }, function (err) {
           documentsDef.reject(err);
         });
       } else {
+        // Make a single big query to get both current page and next pages start keys.
         query(startKey, uppermostKey, (pageSize * nextNumber) + 1).then(function (body) {
+          // Prevent empty pages.
           if (body.rows.length === 0) {
             documentsDef.reject('No document found');
             nextDef.reject('No document found');
@@ -188,6 +196,7 @@ module.exports = function (config) {
             var documents = [];
             var pages = [];
             var i;
+            // Select values only for the page range.
             for (i = 0; i < pageSize && i < body.rows.length; i++) {
               documents.push(body.rows[i].value);
             }
@@ -202,21 +211,23 @@ module.exports = function (config) {
           nextDef.reject(err);
         });
       }
+      // No need to query previous pages start keys if on the start page or if explicitely requested.
       if ((prevNumber > 0) && (startKey !== lowestKey)) {
+        // Find all previous pages. `+ 2` because the first key of the current page is included and that the existence
+        // of an extra document in order to detect first page properly.
         query(startKey, lowestKey, (prevNumber * pageSize) + 2, false, true).then(function (body) {
-          // Find all previous pages, not using the extra page queried to know if this is the first page if page size is 1
           var pages = [];
           for (var i = pageSize; i < body.rows.length && pages.length < prevNumber; i += pageSize) {
             pages.push(body.rows[i].key);
           }
-          // We have start page
+          // If the response contains less items than expected then start page is included.
           if (body.rows.length !== (prevNumber * pageSize) + 2) {
+            // Start page is actually the last one recorded.
             if (body.rows[body.rows.length - 1].key === pages[pages.length - 1]) {
-              // Start page is the actually the last recorded
               pages[pages.length - 1] = null;
+            // Start page is an additional one if there is more than this page first element in the response.
             } else if (body.rows.length > 1) {
-              // Start page is an additional one
-              pages[pages.length] = null;
+              pages.push(null);
             }
           }
           previousDef.resolve(pages);
@@ -226,8 +237,8 @@ module.exports = function (config) {
       } else {
         previousDef.resolve([]);
       }
-
       return when.all([previousDef.promise, documentsDef.promise, nextDef.promise]).then(function (resolved) {
+        // Build the output.
         var result;
         if (asJson || renderView) {
           result = {};
@@ -237,6 +248,7 @@ module.exports = function (config) {
         result[previousExportKey] = resolved[0];
         result[documentsExportKey] = resolved[1];
         result[nextExportKey] = resolved[2];
+        // Terminate middleware working.
         if (asJson) {
           res.json(result);
         } else if (renderView) {
