@@ -3,6 +3,8 @@
 
 var nano = require('nano');
 var when = require('when');
+var apply = require('when/apply');
+
 // # CouchDB pagination
 //
 // [Connect](http://www.senchalabs.org/connect/) middleware for paginated [CouchDB](https://couchdb.apache.org/) views.
@@ -61,6 +63,37 @@ var when = require('when');
 //       view: 'myview',
 //       renderView: 'myview.jade'
 //     }));
+//
+// ### Complex keys
+//
+// Blog posts example: comments attached to posts, organized by timestamp.
+//
+// Document example:
+//
+//     { postId: "abcdef", timestamp: 1234, author: "Foo", comment: "Bar" }
+//
+// Map function (no reduce function):
+//
+//     function (doc) { emit([doc.postId, doc.timestamp], null); }
+//
+// Pagination of comments for a given post exposed as an JSON API:
+//
+//     var paginate = require('couchdb-paginate');
+//     app.get('/comments/:post/:startTimestamp', paginate({
+//       couchURI: 'http://localhost:5984',
+//       database: 'dbname',
+//       design: 'blogposts',
+//       view: 'comments_by_post',
+//       useDocuments: true
+//       asJson: true,
+//       getBounds: function (req) {
+//         return [
+//           [req.params.post, 0],
+//           [req.params.post, req.params.startTimestamp],
+//           [req.params.post, 9007199254740992]
+//         ];
+//       }
+//     }));
 module.exports = function (config) {
   // ## Configuration options
   //
@@ -87,19 +120,29 @@ module.exports = function (config) {
   }
   // ### Bounds and navigation
   //
-  // * `lowestKey`: lowest key to restrict explored range
-  // * `uppermostKey`: uppermost key to restrict explored range
-  // * `getStartKey` (default: fetch from query parameter called `start`): how to get requested page from the request
+  // * `getStartKey` (default: fetch from query parameter called `start`): how to get requested start key from the request
+  // * `getBounds` (default: no limits and start key from `getStartKey`): how to get navigation bounds from the request (if set then `getStartKey` will be ignored)
   //
-  // `getStartKey` gets the request passed as an argument and may return `undefined` to indicate that it
-  // searches the start page. It can also return a promise if it needs asynchronous working.
-  //
-  // TODO: make `lowestKey` and `uppermostKey` computable from the request too.
-  var lowestKey = config.lowestKey;
-  var uppermostKey = config.uppermostKey;
-  var getStartKey = config.getStartKey || function (req) { return req.params.start; };
-  if (typeof getStartKey != 'function') {
-    throw new TypeError('"getStartKey" is not a function');
+  // Get bounds is expected to return an array (or a promise that will resolve an array) with three elements:
+  // * the lowest key to display
+  // * the current page start key
+  // * the highest key to display
+  // By default it uses no limits and take start key from request parameter `start`. Can be used to have more complex
+  // keys.
+  var getBounds;
+  if (typeof config.getBounds == 'function') {
+    getBounds = config.getBounds;
+  } else if (typeof config.getBounds == 'undefined') {
+    if (typeof config.getStartKey == 'function') {
+      var getStartKey = config.getStartKey;
+      getBounds = function (req) { return [undefined, getStartKey(req), undefined]; };
+    } else if (typeof config.getBounds == 'undefined') {
+      getBounds = function (req) { return [undefined, req.params.start, undefined]; };
+    } else {
+      throw new TypeError('"getStartKey" is not a function');
+    }
+  } else {
+    throw new TypeError('"getBounds" is not a function');
   }
   // ### Content to display
   //
@@ -204,7 +247,7 @@ module.exports = function (config) {
   }
   // ## Actual middleware
   return function (req, res, next) {
-    when(getStartKey(req)).then(function (startKey) {
+    when(getBounds(req)).then(apply(function (lowestKey, startKey, uppermostKey) {
       var nextDef = when.defer();
       var previousDef = when.defer();
       var documentsDef = when.defer();
@@ -294,12 +337,13 @@ module.exports = function (config) {
             pages.push(body.rows[i].key);
           }
           // If the response contains less items than expected then start page is included.
-          if (body.rows.length !== (prevNumber * pageSize) + 2) {
-            // Start page is actually the last one recorded.
+          if (body.rows.length > 1 && body.rows.length !== (prevNumber * pageSize) + 2) {
+            // Start page is actually the last one recorded (do not test for equality with lowestKey as the later may
+            // not exist at all).
             if (body.rows[body.rows.length - 1].key === pages[pages.length - 1]) {
               pages[pages.length - 1] = null;
             // Start page is an additional one if there is more than this page first element in the response.
-            } else if (body.rows.length > 1) {
+            } else {
               pages.push(null);
             }
           }
@@ -330,7 +374,7 @@ module.exports = function (config) {
           next();
         }
       });
-    }).otherwise(function (error) {
+    })).otherwise(function (error) {
       next(error);
     });
   };
