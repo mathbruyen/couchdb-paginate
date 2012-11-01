@@ -1,0 +1,27 @@
+{
+  "name": "couchdb-paginate",
+  "version": "0.0.1",
+  "author": {
+    "name": "Mathieu Bruyen",
+    "email": "code@mais-h.eu"
+  },
+  "licenses": [
+    {
+      "type": "MIT"
+    }
+  ],
+  "engines": {
+    "node": "~0.8.11",
+    "npm": "1.1.x"
+  },
+  "dependencies": {
+    "nano": "3.2.0",
+    "when": "1.5.1"
+  },
+  "devDependencies": {
+    "docco": "0.4.0",
+    "grunt": "0.3.16",
+    "grunt-simple-mocha": "0.2.0",
+    "mocha": "1.6.0"
+  }
+}
