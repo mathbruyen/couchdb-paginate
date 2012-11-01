@@ -34,7 +34,7 @@ module.exports = function (config) {
   // * `uppermostKey`: uppermost key to restrict explored range
   // * `getStartKey` (default: fetch from query parameter called `start`): how to get requested page from the request
   //
-  // `getStartKey` gets the request passed as an argument and may return `undefined` or `null` to indicate that it
+  // `getStartKey` gets the request passed as an argument and may return `undefined` to indicate that it
   // searches the start page. It can also return a promise if it needs asynchronous working.
   //
   // TODO: make `lowestKey` and `uppermostKey` computable from the request too.
@@ -100,7 +100,7 @@ module.exports = function (config) {
       var previousDef = when.defer();
       var documentsDef = when.defer();
       // If start key is not provided, then use the lowermost one to get start page.
-      if (startKey === null || startKey === undefined) {
+      if (startKey === undefined) {
         startKey = lowestKey;
       }
       if (useDocuments) {
