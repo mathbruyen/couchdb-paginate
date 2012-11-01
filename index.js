@@ -11,6 +11,56 @@ var when = require('when');
 //
 // ## Examples
 //
+// ### Reduced values
+//
+// View with both a `map` and a reduce function:
+//
+//     var paginate = require('couchdb-paginate');
+//     app.get('/list/:start', paginate({
+//       couchURI: 'http://localhost:5984',
+//       database: 'dbname',
+//       design: 'mydesign',
+//       view: 'myview'
+//     }), function (req, res, next) { /* display */ });
+//
+// ### Indexed documents
+//
+// View with only a `map` function like `function (doc) { emit(doc.key, null); }`:
+//
+//     var paginate = require('couchdb-paginate');
+//     app.get('/list/:start', paginate({
+//       couchURI: 'http://localhost:5984',
+//       database: 'dbname',
+//       design: 'mydesign',
+//       view: 'myview',
+//       useDocuments: true
+//     }), function (req, res, next) { /* display */ });
+//
+// ### API access (JSON)
+//
+// View with only a `map` function like `function (doc) { emit(doc.key, null); }`:
+//
+//     var paginate = require('couchdb-paginate');
+//     app.get('/api/list/:start', paginate({
+//       couchURI: 'http://localhost:5984',
+//       database: 'dbname',
+//       design: 'mydesign',
+//       view: 'myview',
+//       asJson: true
+//     }));
+//
+// ### View displaying
+//
+// View with only a `map` function like `function (doc) { emit(doc.key, null); }`:
+//
+//     var paginate = require('couchdb-paginate');
+//     app.get('/list/:start', paginate({
+//       couchURI: 'http://localhost:5984',
+//       database: 'dbname',
+//       design: 'mydesign',
+//       view: 'myview',
+//       renderView: 'myview.jade'
+//     }));
 module.exports = function (config) {
   // ## Configuration options
   //
