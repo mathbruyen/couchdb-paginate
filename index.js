@@ -168,48 +168,6 @@ module.exports = function (config) {
   if (typeof prevNumber != 'number' || isNaN(prevNumber) || Math.floor(prevNumber) !== prevNumber || prevNumber < 0) {
     throw new TypeError('"prevNumber" is not a positive integer');
   }
-  var fetchPrev;
-  // Prepare the method used to fetch previous pages.
-  //
-  // No need to query for previous pages if no page requested.
-  if (prevNumber === 0) {
-    fetchPrev = function () {
-      return [];
-    };
-  } else {
-    fetchPrev = function (startKey, lowestKey) {
-      // No need to query for previous pages if on the start page.
-      if (startKey === lowestKey) {
-        return [];
-      // In general case fetch the number of elements in previous pages plus two (one because the start document is
-      // included in the results and one to detect if the last fetched page is actually the first one) and record the
-      // keys of start keys, with additional start page detection.
-      } else {
-        var deferred = when.defer();
-        query(startKey, lowestKey, (prevNumber * pageSize) + 2, false, true).then(function (body) {
-          var pages = [];
-          for (var i = pageSize; i < body.rows.length && pages.length < prevNumber; i += pageSize) {
-            pages.push(body.rows[i].key);
-          }
-          // If the response contains less items than expected then start page is included.
-          if (body.rows.length > 1 && body.rows.length !== (prevNumber * pageSize) + 2) {
-            // Start page is actually the last one recorded (do not test for equality with lowestKey as the later may
-            // not exist at all).
-            if (body.rows[body.rows.length - 1].key === pages[pages.length - 1]) {
-              pages[pages.length - 1] = null;
-            // Start page is an additional one if there is more than this page first element in the response.
-            } else {
-              pages.push(null);
-            }
-          }
-          deferred.resolve(pages);
-        }, function (err) {
-          deferred.reject(err);
-        });
-        return deferred.promise;
-      }
-    };
-  }
   var useDocuments = config.useDocuments || false;
   if (typeof useDocuments != 'boolean') {
     throw new TypeError('"useDocuments" is not a boolean');
@@ -287,89 +245,146 @@ module.exports = function (config) {
     });
     return deferred.promise;
   }
+  var fetchPrev;
+  // Prepare the method used to fetch current and next pages.
+  var fetchCurrentAndNext;
+  // When fetching documents, use different requests to get next pages start keys and documents to limit response
+  // size. Otherzise the content would be fetched anyway so get documents and next pages start keys in one request.
+  if (useDocuments) {
+    fetchCurrentAndNext = function (startKey, uppermostKey) {
+      var documentsDef = when.defer();
+      var nextDef = when.defer();
+      query(startKey, uppermostKey, pageSize, true).then(function (body) {
+        // Prevent empty pages.
+        if (body.rows.length === 0) {
+          documentsDef.reject('No document found');
+          nextDef.reject('No document found');
+        } else {
+          // Select documents.
+          documentsDef.resolve(body.rows.map(function (item) { return item.doc; }));
+          // No need to compute next pages start keys if there are not enought result to even fully populate this page.
+          if (body.rows.length === pageSize) {
+            // `nextNumber - 1` to include only the first document of the last path and `+ 2` because the last
+            // document of this page is also included.
+            query(body.rows[body.rows.length - 1].key, uppermostKey, (pageSize * (nextNumber - 1)) + 2).then(function (body) {
+              var pages = [];
+              for (var i = 1; i < body.rows.length; i += pageSize) {
+                pages.push(body.rows[i].key);
+              }
+              nextDef.resolve(pages);
+            }, function (err) {
+              nextDef.reject(err);
+            });
+          } else {
+            nextDef.resolve([]);
+          }
+        }
+      }, function (err) {
+        documentsDef.reject(err);
+        nextDef.reject(err);
+      });
+      return [documentsDef.promise, nextDef.promise];
+    };
+  // If no next pages are requested no need to query extra documents at all.
+  } else if (nextNumber === 0) {
+    fetchCurrentAndNext = function (startKey, uppermostKey) {
+      var documentsDef = when.defer();
+      query(startKey, uppermostKey, pageSize).then(function (body) {
+        // Prevent empty pages.
+        if (body.rows.length === 0) {
+          documentsDef.reject('No document found');
+        } else {
+          // Select reduced values.
+          documentsDef.resolve(body.rows.map(function (item) { return item.value; }));
+        }
+      }, function (err) {
+        documentsDef.reject(err);
+      });
+      return [documentsDef.promise, []];
+    };
+  } else {
+    fetchCurrentAndNext = function (startKey, uppermostKey) {
+      var documentsDef = when.defer();
+      var nextDef = when.defer();
+      // Make a single big query to get both current page and next pages start keys.
+      query(startKey, uppermostKey, (pageSize * nextNumber) + 1).then(function (body) {
+        // Prevent empty pages.
+        if (body.rows.length === 0) {
+          documentsDef.reject('No document found');
+          nextDef.reject('No document found');
+        } else {
+          var documents = [];
+          var pages = [];
+          var i;
+          // Select values only for the page range.
+          for (i = 0; i < pageSize && i < body.rows.length; i++) {
+            documents.push(body.rows[i].value);
+          }
+          for (i = pageSize; i < body.rows.length; i += pageSize) {
+            pages.push(body.rows[i].key);
+          }
+          documentsDef.resolve(documents);
+          nextDef.resolve(pages);
+        }
+      }, function(err) {
+        documentsDef.reject(err);
+        nextDef.reject(err);
+      });
+      return [documentsDef.promise, nextDef.promise];
+    };
+  }
+  // Prepare the method used to fetch previous pages.
+  //
+  // No need to query for previous pages if no page requested.
+  if (prevNumber === 0) {
+    fetchPrev = function () {
+      return [];
+    };
+  } else {
+    fetchPrev = function (startKey, lowestKey) {
+      // No need to query for previous pages if on the start page.
+      if (startKey === lowestKey) {
+        return [];
+      // In general case fetch the number of elements in previous pages plus two (one because the start document is
+      // included in the results and one to detect if the last fetched page is actually the first one) and record the
+      // keys of start keys, with additional start page detection.
+      } else {
+        var deferred = when.defer();
+        query(startKey, lowestKey, (prevNumber * pageSize) + 2, false, true).then(function (body) {
+          var pages = [];
+          for (var i = pageSize; i < body.rows.length && pages.length < prevNumber; i += pageSize) {
+            pages.push(body.rows[i].key);
+          }
+          // If the response contains less items than expected then start page is included.
+          if (body.rows.length > 1 && body.rows.length !== (prevNumber * pageSize) + 2) {
+            // Start page is actually the last one recorded (do not test for equality with lowestKey as the later may
+            // not exist at all).
+            if (body.rows[body.rows.length - 1].key === pages[pages.length - 1]) {
+              pages[pages.length - 1] = null;
+            // Start page is an additional one if there is more than this page first element in the response.
+            } else {
+              pages.push(null);
+            }
+          }
+          deferred.resolve(pages);
+        }, function (err) {
+          deferred.reject(err);
+        });
+        return deferred.promise;
+      }
+    };
+  }
   // ## Actual middleware
   return function (req, res, next) {
     when(getBounds(req)).then(apply(function (lowestKey, startKey, uppermostKey) {
       var nextDef = when.defer();
-      var previousDef = when.defer();
       var documentsDef = when.defer();
       // If start key is not provided, then use the lowermost one to get start page.
       if (startKey === undefined) {
         startKey = lowestKey;
       }
-      // When fetching documents, use different requests to get next pages start keys and documents to limit response
-      // size. Otherzise the content would be fetched anyway so get documents and next pages start keys in one request.
-      if (useDocuments) {
-        query(startKey, uppermostKey, pageSize, true).then(function (body) {
-          // Prevent empty pages.
-          if (body.rows.length === 0) {
-            documentsDef.reject('No document found');
-            nextDef.reject('No document found');
-          } else {
-            // Select documents.
-            documentsDef.resolve(body.rows.map(function (item) { return item.doc; }));
-            // No need to compute next pages start keys if there are not enought result to even fully populate this page.
-            if (body.rows.length === pageSize) {
-              // `nextNumber - 1` to include only the first document of the last path and `+ 2` because the last
-              // document of this page is also included.
-              query(body.rows[body.rows.length - 1].key, uppermostKey, (pageSize * (nextNumber - 1)) + 2).then(function (body) {
-                var pages = [];
-                for (var i = 1; i < body.rows.length; i += pageSize) {
-                  pages.push(body.rows[i].key);
-                }
-                nextDef.resolve(pages);
-              }, function (err) {
-                nextDef.reject(err);
-              });
-            } else {
-              nextDef.resolve([]);
-            }
-          }
-        }, function (err) {
-          documentsDef.reject(err);
-          nextDef.reject(err);
-        });
-      // If no next pages are requested no need to query extra documents at all.
-      } else if (nextNumber === 0) {
-        nextDef.resolve([]);
-        query(startKey, uppermostKey, pageSize).then(function (body) {
-          // Prevent empty pages.
-          if (body.rows.length === 0) {
-            documentsDef.reject('No document found');
-          } else {
-            // Select reduced values.
-            documentsDef.resolve(body.rows.map(function (item) { return item.value; }));
-          }
-        }, function (err) {
-          documentsDef.reject(err);
-        });
-      } else {
-        // Make a single big query to get both current page and next pages start keys.
-        query(startKey, uppermostKey, (pageSize * nextNumber) + 1).then(function (body) {
-          // Prevent empty pages.
-          if (body.rows.length === 0) {
-            documentsDef.reject('No document found');
-            nextDef.reject('No document found');
-          } else {
-            var documents = [];
-            var pages = [];
-            var i;
-            // Select values only for the page range.
-            for (i = 0; i < pageSize && i < body.rows.length; i++) {
-              documents.push(body.rows[i].value);
-            }
-            for (i = pageSize; i < body.rows.length; i += pageSize) {
-              pages.push(body.rows[i].key);
-            }
-            documentsDef.resolve(documents);
-            nextDef.resolve(pages);
-          }
-        }, function(err) {
-          documentsDef.reject(err);
-          nextDef.reject(err);
-        });
-      }
-      return when.all([fetchPrev(startKey, lowestKey), documentsDef.promise, nextDef.promise]).then(function (resolved) {
+      var tmp = fetchCurrentAndNext(startKey, uppermostKey);
+      return when.all([fetchPrev(startKey, lowestKey), tmp[0], tmp[1]]).then(function (resolved) {
         // Build the output.
         var result;
         if (asJson || renderView) {
