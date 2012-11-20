@@ -246,7 +246,7 @@ module.exports = function (config) {
     return deferred.promise;
   }
   var fetchPrev;
-  // Prepare the method used to fetch current and next pages.
+  // ## Prepare the method used to fetch current and next pages.
   var fetchCurrentAndNext;
   // When fetching documents, use different requests to get next pages start keys and documents to limit response
   // size. Otherzise the content would be fetched anyway so get documents and next pages start keys in one request.
@@ -333,7 +333,7 @@ module.exports = function (config) {
       return [documentsDef.promise, nextDef.promise];
     };
   }
-  // Prepare the method used to fetch previous pages.
+  // ## Prepare the method used to fetch previous pages.
   //
   // No need to query for previous pages if no page requested.
   if (prevNumber === 0) {
