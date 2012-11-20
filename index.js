@@ -168,6 +168,48 @@ module.exports = function (config) {
   if (typeof prevNumber != 'number' || isNaN(prevNumber) || Math.floor(prevNumber) !== prevNumber || prevNumber < 0) {
     throw new TypeError('"prevNumber" is not a positive integer');
   }
+  var fetchPrev;
+  // Prepare the method used to fetch previous pages.
+  //
+  // No need to query for previous pages if no page requested.
+  if (prevNumber === 0) {
+    fetchPrev = function () {
+      return [];
+    };
+  } else {
+    fetchPrev = function (startKey, lowestKey) {
+      // No need to query for previous pages if on the start page.
+      if (startKey === lowestKey) {
+        return [];
+      // In general case fetch the number of elements in previous pages plus two (one because the start document is
+      // included in the results and one to detect if the last fetched page is actually the first one) and record the
+      // keys of start keys, with additional start page detection.
+      } else {
+        var deferred = when.defer();
+        query(startKey, lowestKey, (prevNumber * pageSize) + 2, false, true).then(function (body) {
+          var pages = [];
+          for (var i = pageSize; i < body.rows.length && pages.length < prevNumber; i += pageSize) {
+            pages.push(body.rows[i].key);
+          }
+          // If the response contains less items than expected then start page is included.
+          if (body.rows.length > 1 && body.rows.length !== (prevNumber * pageSize) + 2) {
+            // Start page is actually the last one recorded (do not test for equality with lowestKey as the later may
+            // not exist at all).
+            if (body.rows[body.rows.length - 1].key === pages[pages.length - 1]) {
+              pages[pages.length - 1] = null;
+            // Start page is an additional one if there is more than this page first element in the response.
+            } else {
+              pages.push(null);
+            }
+          }
+          deferred.resolve(pages);
+        }, function (err) {
+          deferred.reject(err);
+        });
+        return deferred.promise;
+      }
+    };
+  }
   var useDocuments = config.useDocuments || false;
   if (typeof useDocuments != 'boolean') {
     throw new TypeError('"useDocuments" is not a boolean');
@@ -327,34 +369,7 @@ module.exports = function (config) {
           nextDef.reject(err);
         });
       }
-      // No need to query previous pages start keys if on the start page or if explicitely requested.
-      if ((prevNumber > 0) && (startKey !== lowestKey)) {
-        // Find all previous pages. `+ 2` because the first key of the current page is included and that the existence
-        // of an extra document in order to detect first page properly.
-        query(startKey, lowestKey, (prevNumber * pageSize) + 2, false, true).then(function (body) {
-          var pages = [];
-          for (var i = pageSize; i < body.rows.length && pages.length < prevNumber; i += pageSize) {
-            pages.push(body.rows[i].key);
-          }
-          // If the response contains less items than expected then start page is included.
-          if (body.rows.length > 1 && body.rows.length !== (prevNumber * pageSize) + 2) {
-            // Start page is actually the last one recorded (do not test for equality with lowestKey as the later may
-            // not exist at all).
-            if (body.rows[body.rows.length - 1].key === pages[pages.length - 1]) {
-              pages[pages.length - 1] = null;
-            // Start page is an additional one if there is more than this page first element in the response.
-            } else {
-              pages.push(null);
-            }
-          }
-          previousDef.resolve(pages);
-        }, function (err) {
-          previousDef.reject(err);
-        });
-      } else {
-        previousDef.resolve([]);
-      }
-      return when.all([previousDef.promise, documentsDef.promise, nextDef.promise]).then(function (resolved) {
+      return when.all([fetchPrev(startKey, lowestKey), documentsDef.promise, nextDef.promise]).then(function (resolved) {
         // Build the output.
         var result;
         if (asJson || renderView) {
