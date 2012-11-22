@@ -247,47 +247,46 @@ module.exports = function (config) {
   }
   var fetchPrev;
   // ## Prepare the method used to fetch current and next pages.
-  var fetchCurrentAndNext;
+  var fetchCurrent = null;
+  var fetchNext = null;
+  var fetchCurrentAndNext = null;
   // When fetching documents, use different requests to get next pages start keys and documents to limit response
   // size. Otherzise the content would be fetched anyway so get documents and next pages start keys in one request.
   if (useDocuments) {
-    fetchCurrentAndNext = function (startKey, uppermostKey) {
+    fetchCurrent = function (startKey, uppermostKey) {
       var documentsDef = when.defer();
-      var nextDef = when.defer();
       query(startKey, uppermostKey, pageSize, true).then(function (body) {
         // Prevent empty pages.
         if (body.rows.length === 0) {
           documentsDef.reject('No document found');
-          nextDef.reject('No document found');
         } else {
           // Select documents.
           documentsDef.resolve(body.rows.map(function (item) { return item.doc; }));
-          // No need to compute next pages start keys if there are not enought result to even fully populate this page.
-          if (body.rows.length === pageSize) {
-            // `nextNumber - 1` to include only the first document of the last path and `+ 2` because the last
-            // document of this page is also included.
-            query(body.rows[body.rows.length - 1].key, uppermostKey, (pageSize * (nextNumber - 1)) + 2).then(function (body) {
-              var pages = [];
-              for (var i = 1; i < body.rows.length; i += pageSize) {
-                pages.push(body.rows[i].key);
-              }
-              nextDef.resolve(pages);
-            }, function (err) {
-              nextDef.reject(err);
-            });
-          } else {
-            nextDef.resolve([]);
-          }
         }
       }, function (err) {
         documentsDef.reject(err);
+      });
+      return documentsDef.promise;
+    };
+    fetchNext = function (startKey, uppermostKey) {
+      var nextDef = when.defer();
+      query(startKey, uppermostKey, (pageSize * nextNumber) + 1).then(function (body) {
+        var pages = [];
+        for (var i = pageSize; i < body.rows.length; i += pageSize) {
+          pages.push(body.rows[i].key);
+        }
+        nextDef.resolve(pages);
+      }, function (err) {
         nextDef.reject(err);
       });
-      return [documentsDef.promise, nextDef.promise];
+      return nextDef.promise;
     };
   // If no next pages are requested no need to query extra documents at all.
   } else if (nextNumber === 0) {
-    fetchCurrentAndNext = function (startKey, uppermostKey) {
+    fetchNext = function () {
+      return [];
+    };
+    fetchCurrent = function (startKey, uppermostKey) {
       var documentsDef = when.defer();
       query(startKey, uppermostKey, pageSize).then(function (body) {
         // Prevent empty pages.
@@ -300,13 +299,13 @@ module.exports = function (config) {
       }, function (err) {
         documentsDef.reject(err);
       });
-      return [documentsDef.promise, []];
+      return documentsDef.promise;
     };
   } else {
+    // When not using documents, content is fetched anyway thus only one request is issued to get both at once.
     fetchCurrentAndNext = function (startKey, uppermostKey) {
       var documentsDef = when.defer();
       var nextDef = when.defer();
-      // Make a single big query to get both current page and next pages start keys.
       query(startKey, uppermostKey, (pageSize * nextNumber) + 1).then(function (body) {
         // Prevent empty pages.
         if (body.rows.length === 0) {
@@ -320,6 +319,7 @@ module.exports = function (config) {
           for (i = 0; i < pageSize && i < body.rows.length; i++) {
             documents.push(body.rows[i].value);
           }
+          // Select start page indexes.
           for (i = pageSize; i < body.rows.length; i += pageSize) {
             pages.push(body.rows[i].key);
           }
@@ -374,6 +374,18 @@ module.exports = function (config) {
       }
     };
   }
+  // ## Retrieves the array of promises
+  var getAllPromises;
+  if (fetchCurrentAndNext !== null) {
+    getAllPromises = function (lowestKey, startKey, uppermostKey) {
+      var tmp = fetchCurrentAndNext(startKey, uppermostKey);
+      return when.all([fetchPrev(startKey, lowestKey), tmp[0], tmp[1]]);
+    };
+  } else {
+    getAllPromises = function (lowestKey, startKey, uppermostKey) {
+      return when.all([fetchPrev(startKey, lowestKey), fetchCurrent(startKey, uppermostKey), fetchNext(startKey, uppermostKey)]);
+    };
+  }
   // ## Actual middleware
   return function (req, res, next) {
     when(getBounds(req)).then(apply(function (lowestKey, startKey, uppermostKey) {
@@ -383,8 +395,7 @@ module.exports = function (config) {
       if (startKey === undefined) {
         startKey = lowestKey;
       }
-      var tmp = fetchCurrentAndNext(startKey, uppermostKey);
-      return when.all([fetchPrev(startKey, lowestKey), tmp[0], tmp[1]]).then(function (resolved) {
+      return getAllPromises(lowestKey, startKey, uppermostKey).then(function (resolved) {
         // Build the output.
         var result;
         if (asJson || renderView) {
