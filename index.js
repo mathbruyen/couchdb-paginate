@@ -11,6 +11,8 @@ var apply = require('when/apply');
 // Inspired from [CouchDB guide](http://guide.couchdb.org/draft/recipes.html#pagination), but left the dealbreaker part
 // out (expects keys to be unique, either emitted by only one document or reduced).
 //
+// Source [repository](https://github.com/mathbruyen/couchdb-paginate).
+//
 // ## Examples
 //
 // ### Reduced values
