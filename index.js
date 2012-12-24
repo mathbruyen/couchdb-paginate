@@ -148,6 +148,7 @@ module.exports = function (config) {
   }
   // ### Content to display
   //
+  // * `allowEmpty` (default: `false`): do not fail on empty list of documents
   // * `pageSize` (default: `20`): number of items per page
   // * `nextNumber` (default: `1`): number of next links to compute
   // * `prevNumber` (default: the value of `nextNumber`): number of previous links to compute
@@ -158,6 +159,10 @@ module.exports = function (config) {
   // content. By setting `useDocuments` to `false`, it works on indexing views with no emitted value
   // (`emit(doc.myKey, null)`) and in that case it assumes there is no reduce function. By explicitely setting
   // `reduce` to `false`, it allows to work with views that emit a value but do not use a reduce function.
+  var allowEmpty = config.allowEmpty || false;
+  if (typeof allowEmpty != 'boolean') {
+    throw new TypeError('"allowEmpty" is not a boolean');
+  }
   var pageSize = config.pageSize || 20;
   if (typeof pageSize != 'number' || isNaN(pageSize) || Math.floor(pageSize) !== pageSize || pageSize <= 0) {
     throw new TypeError('"pageSize" is not a strictly positive integer');
@@ -259,7 +264,7 @@ module.exports = function (config) {
       var documentsDef = when.defer();
       query(startKey, uppermostKey, pageSize, true).then(function (body) {
         // Prevent empty pages.
-        if (body.rows.length === 0) {
+        if ((!allowEmpty) && (body.rows.length === 0)) {
           documentsDef.reject('No document found');
         } else {
           // Select documents.
@@ -292,7 +297,7 @@ module.exports = function (config) {
       var documentsDef = when.defer();
       query(startKey, uppermostKey, pageSize).then(function (body) {
         // Prevent empty pages.
-        if (body.rows.length === 0) {
+        if ((!allowEmpty) && (body.rows.length === 0)) {
           documentsDef.reject('No document found');
         } else {
           // Select reduced values.
@@ -310,7 +315,7 @@ module.exports = function (config) {
       var nextDef = when.defer();
       query(startKey, uppermostKey, (pageSize * nextNumber) + 1).then(function (body) {
         // Prevent empty pages.
-        if (body.rows.length === 0) {
+        if ((!allowEmpty) && (body.rows.length === 0)) {
           documentsDef.reject('No document found');
           nextDef.reject('No document found');
         } else {
